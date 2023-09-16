@@ -21,7 +21,7 @@
   `pandas`
   `dask`
   `matplotlib`
- You can install these packages using pip by running `pip install numpy scikit-learn pandas dask`
+ You can install these packages using pip by running `pip install numpy scikit-learn pandas dask matplotlib`
 ## Installation 
  To install `dissim`, download the `dissim-0.1.1-py3-none-any.whl` [file](https://github.com/nkusharoraa/dissim/raw/main/dissim-0.1.1-py3-none-any.whl) from the root folder of the repository and run `pip install ./dissim-0.1.1-py3-none-any.whl` in the same folder.
 ## Usage
