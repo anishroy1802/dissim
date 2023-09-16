@@ -11,6 +11,8 @@
 ### Stochastic Ruler Algorithm
  This algorithm was originally described by Yan and Mukai in 1992 for asymptotically determining the global optima of discrete simulation optimization problems. It has been proven to have asymptotic convergence in probability to the global optimum solution. This algorithm is described in the research paper “Stochastic discrete optimization” by Yan, Di, and H. Mukai.
  
+### Simulated Annealing Algorithm
+ The Simulated Annealing Algorithm, introduced in 1983 by Kirkpatrick, Gelatt, and Vecchi, revolutionized the realm of optimization for tackling complex, discrete simulation optimization problems. This elegant approach has demonstrated remarkable asymptotic convergence properties, reliably guiding its search towards global optima. This algorithm is described in the paper "Optimization by Simulated Annealing" by S. Kirkpatrick, C. D. Gelatt Jr., and M. P. Vecchi.
 
 ## Requirements
  To use Dissim, you will need to have the following packages installed in your system:
@@ -18,6 +20,7 @@
   `scikit-learn`
   `pandas`
   `dask`
+  `matplotlib`
  You can install these packages using pip by running `pip install numpy scikit-learn pandas dask`
 ## Installation 
  To install `dissim`, download the `dissim-0.1.1-py3-none-any.whl` [file](https://github.com/nkusharoraa/dissim/raw/main/dissim-0.1.1-py3-none-any.whl) from the root folder of the repository and run `pip install ./dissim-0.1.1-py3-none-any.whl` in the same folder.
