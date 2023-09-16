@@ -15,7 +15,77 @@ import pandas as pd
 import dask.dataframe as dd
 import time
 import random
+import matplotlib.pyplot as plt
 
+
+### Simulated Annealing algorithm
+
+
+def tracing_start():
+    """
+    Starts tracing of memory allocation using tracemalloc.
+    """
+    tracemalloc.stop()
+    print("nTracing Status : ", tracemalloc.is_tracing())
+    tracemalloc.start()
+    print("Tracing Status : ", tracemalloc.is_tracing())
+def tracing_mem():
+    """
+    Prints the peak memory usage.
+    """
+    first_size, first_peak = tracemalloc.get_traced_memory()
+    peak = first_peak/(1024*1024)
+    print("Peak Size in MB - ", peak)
+
+
+class SA():
+    def __init__(self, objective_function, initial_temperature, cooling_rate, num_iterations, step_size, domain_min, domain_max):
+        self.objective_function = objective_function
+        self.initial_temperature = initial_temperature
+        self.cooling_rate = cooling_rate
+        self.num_iterations = num_iterations
+        self.step_size = step_size
+        self.domain_min = domain_min
+        self.domain_max = domain_max
+        self.history = []
+
+    def generate_neighbor(self, x):
+        # Generate a random neighbor within the specified domain
+        neighbor = x + self.step_size * np.random.randn(len(x))
+        neighbor = np.clip(neighbor, self.domain_min, self.domain_max)  # Clip neighbor values to the domain
+        return neighbor
+
+    def metropolis_criterion(self, energy_difference, current_temperature):
+        return energy_difference < 0 or np.random.rand() < np.exp(-energy_difference / current_temperature)
+
+    def run(self):
+        x = np.random.uniform(self.domain_min, self.domain_max)  # Initialize x randomly within the domain
+        current_temperature = self.initial_temperature
+
+        for iteration in range(self.num_iterations):
+            for _ in range(10):  # Number of iterations at each temperature level
+                neighbor = self.generate_neighbor(x)
+                current_energy = self.objective_function(x)
+                neighbor_energy = self.objective_function(neighbor)
+
+                energy_difference = neighbor_energy - current_energy
+
+                if self.metropolis_criterion(energy_difference, current_temperature):
+                    x = neighbor
+
+            self.history.append((x, self.objective_function(x)))
+            current_temperature *= self.cooling_rate
+
+    def plot_objective_variation(self):
+        iterations = list(range(1, self.num_iterations + 1))
+        objective_values = [item[1] for item in self.history]
+
+        plt.plot(iterations, objective_values, marker='o')
+        plt.xlabel("Iterations")
+        plt.ylabel("Objective Function Value")
+        plt.title("Objective Function Variation")
+        plt.grid(True)
+        plt.show()
 
 #### Adaptive Hyperbox Algorithm
 
@@ -525,3 +595,6 @@ class stochastic_ruler():
       return funcval
     # print("acc" + str(acc))
     
+
+
+
