@@ -78,7 +78,7 @@ class SA():
                     if R[i][j]!=0:
                         R_prime[i][j] = euclidean([self.solution_space[i]], [self.solution_space[j]])
             
-        print("Transition Matrix:", R) 
+        #print("Transition Matrix:", R) 
         return R_prime, R
 
     
