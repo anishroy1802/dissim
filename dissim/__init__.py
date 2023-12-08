@@ -16,6 +16,7 @@ import dask.dataframe as dd
 import time
 import random
 import matplotlib.pyplot as plt
+from scipy.spatial.distance import euclidean
 
 
 ### Simulated Annealing algorithm
@@ -39,55 +40,133 @@ def tracing_mem():
 
 
 class SA():
-    def __init__(self, objective_function, initial_temperature, cooling_rate, num_iterations, step_size, domain_min, domain_max):
-        self.objective_function = objective_function
-        self.initial_temperature = initial_temperature
-        self.cooling_rate = cooling_rate
-        self.num_iterations = num_iterations
-        self.step_size = step_size
+    def __init__(self, domain_min, domain_max, step_size, T, custom_H_function, nbd_structure, k= 300, percent_reduction=None):
         self.domain_min = domain_min
         self.domain_max = domain_max
-        self.history = []
+        self.step_size = step_size
+        self.T = T
+        self.k = k
+        self.custom_H_function = custom_H_function
+        self.solution_space = np.arange(domain_min, domain_max, step_size)
+        self.n = len(self.solution_space)
+        self.L = [i + 100 for i in range(0, k)]
+        self.V = np.zeros(self.n)
+        self.X_opt = []
+        self.nbd_structure = nbd_structure
+        self.function_values = []
+        self.initial_function_value = None  # Store the initial function value
+        self.percent_reduction = percent_reduction
+        
 
-    def generate_neighbor(self, x):
-        # Generate a random neighbor within the specified domain
-        neighbor = x + self.step_size * np.random.randn(len(x))
-        neighbor = np.clip(neighbor, self.domain_min, self.domain_max)  # Clip neighbor values to the domain
-        return neighbor
+    def create_neighborhood_and_transition_matrix(self):
+        self.neighborhoods = {}
+        if self.nbd_structure == "N1":
+            for x in self.solution_space:
+                N = [el for el in self.solution_space if el != x]
+                self.neighborhoods[x] = N
+        else:
+            for i in range(self.n):
+                neighbors = set()  # Create an empty set for neighbors of x[i].
+                
+                # Add the previous element (wrap-around to the last element if i is 0).
+                neighbors.add(self.solution_space[(i - 1) % self.n])
+                
+                # Add the next element (wrap-around to the first element if i is n-1).
+                neighbors.add(self.solution_space[(i + 1) % self.n])
+                
+                self.neighborhoods[self.solution_space[i]] = neighbors  # Store the neighbors of x[i] in the dictionary.
 
-    def metropolis_criterion(self, energy_difference, current_temperature):
-        return energy_difference < 0 or np.random.rand() < np.exp(-energy_difference / current_temperature)
+        if self.nbd_structure == "N1":
+            R_prime = np.zeros((self.n, self.n))
+            for i in range(self.n):
+                for j in range(self.n):
+                    R_prime[i, j] = euclidean([self.solution_space[i]], [self.solution_space[j]])
 
-    def run(self):
-        x = np.random.uniform(self.domain_min, self.domain_max)  # Initialize x randomly within the domain
-        current_temperature = self.initial_temperature
+            D = np.sum(R_prime, axis=1)
+            R = R_prime / D[:, np.newaxis]
+        else:
+            R = np.zeros((self.n, self.n))
+            R_prime = np.zeros((self.n, self.n))
 
-        for iteration in range(self.num_iterations):
-            for _ in range(10):  # Number of iterations at each temperature level
-                neighbor = self.generate_neighbor(x)
-                current_energy = self.objective_function(x)
-                neighbor_energy = self.objective_function(neighbor)
+            for i in range(self.n):
+                for j in range(self.n):
+                    if self.solution_space[i] in self.neighborhoods[self.solution_space[j]]:
+                        R[i][j] = 0.5
 
-                energy_difference = neighbor_energy - current_energy
+                    if R[i][j]!=0:
+                        R_prime[i][j] = euclidean([self.solution_space[i]], [self.solution_space[j]])
+            
+        #print("Transition Matrix:", R) 
+        return R_prime, R
 
-                if self.metropolis_criterion(energy_difference, current_temperature):
-                    x = neighbor
+    
+    def j_from_x(self, x):
+        j = int(((x - self.domain_min) / (self.domain_max - self.domain_min)) * self.n)
+        return j
+    
+    def optimize(self):
+        R_prime, R = self.create_neighborhood_and_transition_matrix()
 
-            self.history.append((x, self.objective_function(x)))
-            current_temperature *= self.cooling_rate
+        X0 = np.random.choice(self.solution_space)
+        X0 = self.solution_space[np.abs(self.solution_space - X0).argmin()]
+        self.X_opt.append(X0)
+        self.V[self.j_from_x(X0)] = 1
 
-    def plot_objective_variation(self):
-        iterations = list(range(1, self.num_iterations + 1))
-        objective_values = [item[1] for item in self.history]
+        for j in range(self.k):
+            x_j = self.X_opt[j]
+            N = self.neighborhoods[x_j]
+            transition_probs = R[self.j_from_x(x_j)]
+            transition_probs /= np.sum(transition_probs)
+            z_j = np.random.choice(self.solution_space, p=transition_probs)
+            z_j = self.solution_space[np.abs(self.solution_space - z_j).argmin()]
+            fx = 0
+            fz = 0
 
-        plt.plot(iterations, objective_values, marker='o')
-        plt.xlabel("Iterations")
-        plt.ylabel("Objective Function Value")
-        plt.title("Objective Function Variation")
+            for sim_iter in range(self.L[j]):
+                fx += self.custom_H_function(x_j)
+                fz += self.custom_H_function(z_j)
+
+            fx = fx / self.L[j]
+            fz = fz / self.L[j]
+            G_xz = np.exp(-(fz - fx) / self.T)
+            x_next = z_j if np.random.rand() <= G_xz else x_j
+            self.V[self.j_from_x(x_next)] += 1
+            D_x_j = np.sum(R_prime[self.j_from_x(x_j), :])
+            D_x_next = np.sum(R_prime[self.j_from_x(x_next), :])
+            x_opt_next = x_next if self.V[self.j_from_x(x_next)] / D_x_next > self.V[self.j_from_x(x_j)] / D_x_j else x_j
+            self.X_opt.append(x_opt_next)
+
+            # Calculate and store the function value for this iteration
+            current_function_value = self.custom_H_function(x_opt_next)
+            self.function_values.append(current_function_value)
+
+            #if self.percent_reduction is not None:
+            if self.initial_function_value is None:
+                self.initial_function_value = current_function_value
+            else:
+                if self.percent_reduction is not None:
+                    if ((self.initial_function_value - current_function_value) >= abs(self.initial_function_value) * (self.percent_reduction/100)):
+                        print("Stopping criterion met (% reduction in function value). Stopping optimization.")
+                        break
+        
+        # Plot the function value vs. iteration
+        plt.figure(figsize=(10, 6))
+        plt.plot(range(len(self.function_values)), self.function_values, marker='o', linestyle='-')
+        plt.xlabel('Iteration')
+        plt.ylabel('Function Value')
+        plt.title('Function Value vs. Iteration; Neighborhood Structure: ' + str(self.nbd_structure))
         plt.grid(True)
         plt.show()
 
-#### Adaptive Hyperbox Algorithm
+    def print_function_values(self):
+        print("iters:", len(self.function_values))
+        #print("VALUES:")
+        print("init:", self.function_values[0])
+        print("final:", self.function_values[-1])
+        print("% reduction:",  100*(self.function_values[0] -  self.function_values[-1])/abs(self.function_values[0]))
+        #print(self.function_values)
+
+### Adaptive Hyperbox Algorithm
 
 class AHA():
   def __init__(self, func,global_domain):

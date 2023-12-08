@@ -1,6 +1,5 @@
 LICENSE.txt
 README.md
-dissim-0.1.1-py3-none-any.whl
 setup.py
 codes/algorithms/Adaptive_Hyperbox_Algorithm/AdaptiveHyperbox.py
 codes/algorithms/Adaptive_Hyperbox_Algorithm/examples/e1.py

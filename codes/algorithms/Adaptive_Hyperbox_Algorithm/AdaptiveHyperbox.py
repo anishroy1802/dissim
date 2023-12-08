@@ -5,6 +5,7 @@ import pandas as pd
 import dask.dataframe as dd
 import time
 import random
+import matplotlib.pyplot as plt
 
 def tracing_start():
     tracemalloc.stop()
@@ -16,7 +17,7 @@ def tracing_mem():
     peak = first_peak/(1024*1024)
     print("Peak Size in MB - ", peak)
 class AHA():
-  def __init__(self, func,global_domain):
+  def __init__(self, func,global_domain, percent = None):
     """Constructor method that initializes the instance variables of the class AHA
 
     Args:
@@ -24,6 +25,7 @@ class AHA():
       global_domain (list of lists): A list of intervals (list of two integers) that defines the search space for the optimization problem.
     """
     self.func = func
+    self.percent = percent
     self.global_domain = global_domain
     # self.initial_choice = initial_choice
     self.x_star = []
@@ -100,7 +102,7 @@ class AHA():
 
 
 
-  def AHAalgolocal(self,max_k,m,loc_domain,x0):
+  def AHAalgolocal(self,m,loc_domain,x0, max_k = 100):
     """ Runs the AHA algorithm for local optimization.
 
     Args:
@@ -120,6 +122,8 @@ class AHA():
     
     
     self.x_star.append(x0)
+    self.initval = self.func(x0)
+    #print(self.initval)
     epsilon = []
     epsilon.append([x0])
     G = 0
@@ -169,13 +173,33 @@ class AHA():
         if(G_bar_best>g_val_bar):
           G_bar_best = g_val_bar
           x_star_k = list(i)
+
       self.x_star.append(x_star_k)
+      self.decrease = 100*(self.initval - self.func(x_star_k) )/ abs(self.initval)
       epsilon.append(epsilonk)
+      if ((self.percent is not None) and (self.decrease >= self.percent*0.01*abs(self.initval))):
+        print("Stopping criterion met (% reduction in function value). Stopping optimization.")
+        break
 
     end = time.time()
     print("time elapsed {} milli seconds".format((end-start)*1000))
     tracing_mem()
     return self.x_star
+  
+  def plot_iterations(self):
+
+    print("iters:",len(self.x_star))
+    print("% decrease:", self.decrease )
+    func_values = [self.func(x) for x in self.x_star]  # Evaluate the function for each solution
+    plt.figure(figsize=(10, 6))
+    plt.plot(range(len(self.x_star)), func_values, marker='o', linestyle='-')
+    plt.xlabel('Iteration')
+    plt.ylabel('Function Value')
+    plt.title('Function Value vs. Iteration')
+    plt.grid(True)
+    plt.show()
+
+
   def AHAalgoglobal(self,iter,max_k,m):
     """ Runs the AHA algorithm for global optimization.
 
@@ -257,3 +281,55 @@ class AHA():
       all_sols.append(solx[-1])
 
     return all_sols,best_sol,best_val
+  
+def objective_function(x):
+    noise = np.random.normal(scale=0.1)  # Add Gaussian noise with a standard deviation of 0.1
+    return 2*x[0] + x[0]**2 + x[1]**2 + noise
+
+def multinodal(x):
+  return (np.sin(0.05*np.pi*x)**6)/2**(2*((x-10)/80)**2)
+
+def func1(x0):
+  x1,x2 = x0[0],x0[1]
+  return -(multinodal(x1)+multinodal(x2))+np.random.normal(0,0.3)
+
+def func2(x):
+  x1,x2,x3,x4 = x[0],x[1], x[2],x[3]
+  return (x1+10*x2)**2 + 5* (x3-x4)**2 + (x2-2*x3)**4 + 10*(x1-x4)**4 
+  + 1 +np.random.normal(0,30)
+
+def facility_loc(x):
+  #normal demand
+  X1,Y1 = x[0],x[1] 
+  X2,Y2 = x[2],x[3] 
+  X3,Y3 = x[4],x[5] 
+  avg_dist_daywise = []
+  T0 = 30
+  n = 6
+  for t in range(T0):
+      total_day = 0                  ##### total distance travelled by people
+      ###### now finding nearest facility and saving total distance 
+      #travelled in each entry of data
+      for i in range(n):
+          for j in range(n):
+              demand=-1
+              while(demand<0):    
+                  demand = np.random.normal(180, 30, size=1)[0]
+              total_day += demand*min(abs(X1-i)+abs(Y1-j) ,
+                                      abs(X2-i)+abs(Y2-j),abs(X3-i)+abs(Y3-j) ) 
+              ### total distance from i,j th location to nearest facility
+      avg_dist_daywise.append(total_day/(n*n))    
+  return sum(avg_dist_daywise)/T0
+
+
+init = [2,2,2,2,2,2]
+dom = [[1,7]]*6
+func1AHA = AHA(facility_loc,dom, percent=60)
+a = func1AHA.AHAalgolocal(50,dom,init, 100)
+
+func1AHA.plot_iterations()
+
+
+# print(b,c)
+print(a[-1])
+print(func1(a[-1]))

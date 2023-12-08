@@ -16,9 +16,13 @@ import dask.dataframe as dd
 import time
 import random
 import matplotlib.pyplot as plt
+from scipy.spatial.distance import euclidean
+from typing import Union, List
+import itertools
+from scipy.spatial.distance import euclidean
+import matlab.engine
 
 ### Simulated Annealing algorithm
-
 
 def tracing_start():
     """
@@ -35,61 +39,262 @@ def tracing_mem():
     first_size, first_peak = tracemalloc.get_traced_memory()
     peak = first_peak/(1024*1024)
     print("Peak Size in MB - ", peak)
-
-
+    
 class SA():
-    def __init__(self, objective_function, initial_temperature, cooling_rate, num_iterations, step_size, domain_min, domain_max):
-        self.objective_function = objective_function
-        self.initial_temperature = initial_temperature
-        self.cooling_rate = cooling_rate
-        self.num_iterations = num_iterations
-        self.step_size = step_size
-        self.domain_min = domain_min
-        self.domain_max = domain_max
+
+    def __init__(self, domain, step_size, T, custom_H_function, nbd_structure, k= 300,percent_reduction=None, initial_solution=None, random_seed=None):
+
+        #self.platform = platform #platform can be "python" or "matlab"
+        self.domain = domain #n*2 matrix
+        self.dimensions = len(self.domain)
+        print("Number of dimensions:", self.dimensions)
+        self.step_size = step_size #n*1 matrix
+        self.T = T
+        self.k = k
+        self.custom_H_function = custom_H_function
+        self.L = [i + 200 for i in range(0, k)]
+        self.initial_solution = initial_solution
+        self.random_seed = random_seed
+        self.X_opt = []
+        self.nbd_structure = nbd_structure
+        self.function_values = []
+        self.initial_function_value = None  # Store the initial function value
+        self.percent_reduction = percent_reduction
+        self.max_euclidean_value = math.sqrt(sum(element[1]**2 - element[0]**2 for element in self.domain))
         self.history = []
+        
 
-    def generate_neighbor(self, x):
-        # Generate a random neighbor within the specified domain
-        neighbor = x + self.step_size * np.random.randn(len(x))
-        neighbor = np.clip(neighbor, self.domain_min, self.domain_max)  # Clip neighbor values to the domain
-        return neighbor
+        n =  self.dimensions
+        # Calculate the number of values (M) within each dimension
+        # M_values = ((self.domain[:, 1] - self.domain[:, 0]) / self.step_size).astype(int) + 1
+        # # Create a meshgrid of values for each dimension
+        # solution_space = [np.linspace(self.domain[i, 0], self.domain[i, 1], M_values[i]) for i in range(n)]
+        # # Convert the list of arrays to a 2D array (n x M)
+        # self.solution_space = np.column_stack(solution_space)
+        sol_space = []
+        for i in range(self.dimensions):
+            sol_space.append(np.arange(self.domain[i][0], self.domain[i][1]+ step_size[i], step_size[i]))
+        
+        self.solution_space = list(itertools.product(*sol_space))
+        #print(self.solution_space)
 
-    def metropolis_criterion(self, energy_difference, current_temperature):
-        return energy_difference < 0 or np.random.rand() < np.exp(-energy_difference / current_temperature)
+    def create_neighborhood(self):
+        self.neighborhoods = {}
+        if self.nbd_structure=="N1":
+            for element in self.solution_space:
+                N = [el for el in self.solution_space if el != element]
+                self.neighborhoods[element] = N
 
-    def run(self):
-        x = np.random.uniform(self.domain_min, self.domain_max)  # Initialize x randomly within the domain
-        current_temperature = self.initial_temperature
+        else:
+            discrete_solution_spaces = [set(point[dim] for point in self.solution_space) for dim in range(len(self.solution_space[0]))]
+            # for dim, values in enumerate(discrete_solution_spaces):
+            #     print(f"Dimension {dim}: {values}")
 
-        for iteration in range(self.num_iterations):
-            for _ in range(10):  # Number of iterations at each temperature level
-                neighbor = self.generate_neighbor(x)
-                current_energy = self.objective_function(x)
-                neighbor_energy = self.objective_function(neighbor)
+            #print(discrete_solution_spaces)
+            #self.discrete_solution_spaces = discrete_solution_spaces
+            for element in self.solution_space:
+                single_space_nbd = []
+                for i in range(self.dimensions):
+                    single_space = list(discrete_solution_spaces[i])
+                    single_space = sorted(single_space)
+                    #print(single_space)
+                    j = single_space.index(element[i])
+                    neighbors = []
+                    neighbors.append(single_space[(j - 1) % len(single_space)])
+                    neighbors.append(single_space[(j + 1) % len(single_space)])
+                    #print("nbd", neighbors)
+                    single_space_nbd.append(neighbors)
+                
+                # print("element", element)
+                # print(single_space_nbd)
 
-                energy_difference = neighbor_energy - current_energy
+                self.neighborhoods[element] = list(itertools.product(*single_space_nbd))
 
-                if self.metropolis_criterion(energy_difference, current_temperature):
-                    x = neighbor
+        #print(self.neighborhoods)
+        return self.neighborhoods
 
-            self.history.append((x, self.objective_function(x)))
-            current_temperature *= self.cooling_rate
+    def get_transition_matrix(self):
 
-    def plot_objective_variation(self):
-        iterations = list(range(1, self.num_iterations + 1))
-        objective_values = [item[1] for item in self.history]
+        self.neighborhoods = self.create_neighborhood()
+        self.D = {}
+        self.R_prime = {}
+        self.R = {}
 
-        plt.plot(iterations, objective_values, marker='o')
-        plt.xlabel("Iterations")
-        plt.ylabel("Objective Function Value")
-        plt.title("Objective Function Variation")
+        if self.nbd_structure == "N1":
+            for element in self.solution_space:
+                self.R[element] = {}
+                self.R_prime[element] = {}
+                self.D[element] = 0
+
+                for neighbor in self.neighborhoods[element]:
+                    self.R_prime[element][neighbor] = self.max_euclidean_value - euclidean(element, neighbor)
+                    self.D[element] += self.R_prime[element][neighbor]
+        else:
+            for element in self.solution_space:
+                self.R[element] = {}
+                self.R_prime[element] = {}
+                self.D[element] = 0
+
+                for neighbor in self.neighborhoods[element]:
+                    self.R_prime[element][neighbor] = 1
+                    self.D[element] += 1
+
+        for element in self.solution_space:
+            for neighbor in self.neighborhoods[element]:
+                self.R[element][neighbor] = self.R_prime[element][neighbor] / self.D[element]
+
+        #print(self.R)
+        return self.R_prime, self.R
+        # self.neighborhoods = self.create_neighborhood()
+        # self.D = {}
+        # self.R_prime = {}
+        # self.R = {}
+        # """
+        # initialize R matrix and R_prime matrix as a dictionary to store values of R(x, x') 
+        # for x' being a neighbour of x and vice versa
+        # """
+        # for element in self.solution_space:
+        #     self.R[element] = {}
+        #     self.R_prime[element] = {}
+        
+        # for element in self.solution_space:
+        #     if self.neighborhoods[element] is not None:
+        #         for neighbor in self.neighborhoods[element]:
+        #             if self.nbd_structure=="N1":
+        #                 self.R_prime[element][neighbor] = euclidean(element, neighbor)
+        #                 self.D[element] += euclidean(element, neighbor)
+        #             else:
+        #                 self.R_prime[element][neighbor] = 1
+        #                 self.D[element] += 1
+        
+        # for element in self.solution_space:
+        #     self.R[element][neighbor] = self.R_prime[element][neighbor]/self.D[element]
+
+        # return self.R_prime, self.R
+
+    def optimize(self):
+        #self.neighborhoods = self.create_neighborhood()
+        self.R_prime, self.R = self.get_transition_matrix()
+        
+        #for convenience convert the dictionary to an array
+        position_index ={}
+        index = 0
+
+        for element in self.solution_space:
+            position_index[index] = element
+            index +=1
+        
+        
+        reverse_mapping = {v: k for k, v in position_index.items()}
+        #print(position_index)
+        #print(len(self.solution_space))
+        self.R_matrix = np.zeros((len(self.solution_space), len(self.solution_space)))
+        self.R_prime_matrix = np.zeros((len(self.solution_space), len(self.solution_space)))
+        for i in range(len(self.solution_space)):
+            for j in range(len(self.solution_space)):
+                position_i = position_index[i]
+                position_j = position_index[j]
+                #print(position_i, position_j)
+                if position_j in self.R[position_i]:
+                    self.R_matrix[i][j] = self.R[position_i][ position_j]
+                    self.R_prime_matrix[i][j] =  self.R_prime[position_i][ position_j]
+                else:
+                    self.R_matrix[i][j] = 0
+                    self.R_prime_matrix[i][j] = 0
+
+        #print(self.R_matrix)
+        if self.initial_solution is None:
+            if self.random_seed is None:
+                random.seed(1234)
+            else:
+                random.seed(self.random_seed)
+            random_index = random.randint(0, len(self.solution_space) - 1)
+            X0 = position_index[random_index]
+        else:
+            X0 = self.initial_solution
+        print("initial solution:", X0)
+
+        self.V={}
+        self.V[X0] = 1
+        self.X_opt.append(X0)
+
+        self.function_values.append(self.custom_H_function(list(X0)))
+        for j in range(self.k):
+            x_j = self.X_opt[j]
+            N = self.neighborhoods[x_j]
+            transition_probs = self.R_matrix[reverse_mapping[x_j]]
+            transition_probs /= np.sum(transition_probs)
+            #print(transition_probs)
+            z_j = position_index[np.random.choice([i for i in range(0, len(self.solution_space))] ,p=transition_probs)]
+            #print("next: ",z_j)
+
+            fx = 0
+            fz = 0
+
+            for sim_iter in range(self.L[j]):
+                fx += self.custom_H_function(list(x_j))
+                fz += self.custom_H_function(list(z_j))
+
+            fx = fx / self.L[j]
+            fz = fz / self.L[j]
+
+            if j == 0:
+                self.history.append(fx)
+            G_xz = np.exp(-(fz - fx) / self.T)
+            if np.random.rand() <= G_xz:
+                x_next = z_j 
+                self.history.append(fz)
+            else :
+                x_next = x_j
+                self.history.append(fx)
+
+            if x_next not in self.V:
+                self.V[x_next] = 1
+            else:
+                self.V[x_next] += 1
+
+            D_x_j = self.D[x_j]
+            D_x_next = self.D[x_next]
+            x_opt_next = x_next if self.V[x_next] / D_x_next > self.V[x_next] / self.D[x_j] else x_j
+            self.X_opt.append(x_opt_next)
+
+            # Calculate and store the function value for this iteration
+            current_function_value = self.custom_H_function(list(x_opt_next))
+            self.function_values.append(current_function_value)
+
+            #if self.percent_reduction is not None:
+            if self.initial_function_value is None:
+                self.initial_function_value = current_function_value
+            else:
+                if self.percent_reduction is not None:
+                    if ((self.initial_function_value - current_function_value) >= abs(self.initial_function_value) * (self.percent_reduction/100)):
+                        print("Stopping criterion of " ,self.percent_reduction,   "% reduction in function value). Stopping optimization.")
+                        break
+
+        # Plot the function value vs. iteration
+        plt.figure(figsize=(10, 6))
+        plt.plot(range(len(self.function_values)), self.function_values, marker='o', linestyle='-')
+        plt.xlabel('Iteration')
+        plt.ylabel('Function Value')
+        plt.title('Function Value vs. Iteration; Neighborhood Structure: ' + str(self.nbd_structure))
         plt.grid(True)
         plt.show()
 
+    def print_function_values(self):
+        #print("V matrix:", self.V)
+        print("iters:", len(self.function_values)-1)
+        # result_string = ' '.join(map(str, self.X_opt))
+        # print("values: ", result_string)
+        #print("VALUES:")
+        # print("init:", self.function_values[0])
+        # print("final:", self.function_values[-1])
+        print("final optimal value: ", self.X_opt[-1])
+        print("% reduction:",  100*(self.function_values[0] -  self.function_values[-1])/abs(self.function_values[0]))
+        print(self.X_opt)
 #### Adaptive Hyperbox Algorithm
 
 class AHA():
-  def __init__(self, func,global_domain):
+  def __init__(self, func,global_domain, percent = None):
     """Constructor method that initializes the instance variables of the class AHA
 
     Args:
@@ -97,6 +302,7 @@ class AHA():
       global_domain (list of lists): A list of intervals (list of two integers) that defines the search space for the optimization problem.
     """
     self.func = func
+    self.percent = percent
     self.global_domain = global_domain
     # self.initial_choice = initial_choice
     self.x_star = []
@@ -173,7 +379,7 @@ class AHA():
 
 
 
-  def AHAalgolocal(self,max_k,m,loc_domain,x0):
+  def AHAalgolocal(self,m,loc_domain,x0, max_k = 100):
     """ Runs the AHA algorithm for local optimization.
 
     Args:
@@ -187,7 +393,14 @@ class AHA():
     """
     #initialisation
     # print(x0)
+    tracing_start()
+    start = time.time()
+    
+    
+    
     self.x_star.append(x0)
+    self.initval = self.func(x0)
+    #print(self.initval)
     epsilon = []
     epsilon.append([x0])
     G = 0
@@ -237,11 +450,33 @@ class AHA():
         if(G_bar_best>g_val_bar):
           G_bar_best = g_val_bar
           x_star_k = list(i)
+
       self.x_star.append(x_star_k)
+      self.decrease = 100*(self.initval - self.func(x_star_k) )/ abs(self.initval)
       epsilon.append(epsilonk)
+      if ((self.percent is not None) and (self.decrease >= self.percent*0.01*abs(self.initval))):
+        print("Stopping criterion met (% reduction in function value). Stopping optimization.")
+        break
 
-
+    end = time.time()
+    print("time elapsed {} milli seconds".format((end-start)*1000))
+    tracing_mem()
     return self.x_star
+  
+  def plot_iterations(self):
+
+    print("iters:",len(self.x_star))
+    print("% decrease:", self.decrease )
+    func_values = [self.func(x) for x in self.x_star]  # Evaluate the function for each solution
+    plt.figure(figsize=(10, 6))
+    plt.plot(range(len(self.x_star)), func_values, marker='o', linestyle='-')
+    plt.xlabel('Iteration')
+    plt.ylabel('Function Value')
+    plt.title('Function Value vs. Iteration')
+    plt.grid(True)
+    plt.show()
+
+
   def AHAalgoglobal(self,iter,max_k,m):
     """ Runs the AHA algorithm for global optimization.
 
@@ -323,7 +558,7 @@ class AHA():
       all_sols.append(solx[-1])
 
     return all_sols,best_sol,best_val
-  
+
 
 
 #### Stochastic Ruler Algorithm
@@ -344,254 +579,318 @@ def tracing_mem():
     peak = first_peak/(1024*1024)
     print("Peak Size in MB - ", peak)
 
-class stochastic_ruler():
-  """
-  The class definition for the implementation of the Stochastic Ruler Random Search Method;
-  Alrefaei, Mahmoud H., and Sigrun Andradottir. 
-  "Discrete stochastic optimization via a modification of the stochastic ruler method."
-  Proceedings Winter Simulation Conference. IEEE, 1996.
-  """
-  def __init__(self, space:dict,model_type:str,maxevals:int = 100, prob_type = 'hyp_opt', func=None):
-    """The constructor for declaring the instance variables in the Stochastic Ruler Random Search Method 
 
-    Args:
-        space (dict): allowed set of values for the set of hyperparameters in the form of a dictionary
-                      hyperparamater name -> key
-                      the list of allowed values for the respective hyperparameter -> value
-        model_type (str): string token for the worked model; from ['MLP':'MLPClassifier', 'SVM':'Support Vector Machine', 'RFC': Random Forest Classifier, 'DTC': Decision Tree Classifier, 'GBC' : Gradient Boosting Classifier ,'user_defined' : for an objective function different from the given models]
-        maxevals (int, optional): maximum number of evaluations for the performance measure; Defaults to 100.
+class stochastic_ruler:
     """
-    self.space = space
-    self.prob_type = prob_type # hyperparam opt (hyp_opt), optimal solution (opt_sol)
-    self.model_type = model_type #for already implemented models in scipy or userdefined
-    self.data = None
-    self.maxevals = maxevals
-    self.initial_choice_HP = None
-    self.Neigh_dict = self.help_neigh_struct()
-    self.func = func
+    The class definition for the implementation of the Stochastic Ruler Random Search Method;
+    Alrefaei, Mahmoud H., and Sigrun Andradottir.
+    "Discrete stochastic optimization via a modification of the stochastic ruler method."
+    Proceedings Winter Simulation Conference. IEEE, 1996.
+    """
 
-  def help_neigh_struct(self)->dict:
-    """The helper method for creating a dictionary containing the position of the respective hyperparameter value in the enumered dictionary of space
+    def __init__(
+        self,
+        space: dict,
+        maxevals: int = 300,
+        prob_type="opt_sol",
+        func=None,
+        percentReduction: int = None,
+        init_solution: dict = None,
+        lower_bound: int = None,
+        upper_bound: int = None,
+    ):
+        """The constructor for declaring the instance variables in the Stochastic Ruler Random Search Method
+
+        Args:
+            space (dict): allowed set of values for the set of hyperparameters in the form of a dictionary
+                        hyperparamater name -> key
+                        the list of allowed values for the respective hyperparameter -> value
+            maxevals (int, optional): maximum number of evaluations for the performance measure; Defaults to 100.
+        """
+        self.space = space  # domain
+        self.prob_type = (
+            prob_type  # hyperparam opt (hyp_opt), optimal solution (opt_sol)
+        )
+
+        self.data = None
+        self.maxevals = maxevals
+        self.initial_choice_HP = None
+        self.Neigh_dict = self.help_neigh_struct()
+        self.func = func
+        self.percentReduction = percentReduction
+        self.init_solution = init_solution
+        self.lower_bound = lower_bound
+        self.upper_bound = upper_bound
+
+    def help_neigh_struct(self) -> dict:
+        # dom = {'x': [i for i in range(1,11)]}
+
+        # sr_userdef2 = stochastic_ruler(dom, 1000, 'opt_sol', ex3)
+        Dict = {}
+        for hyper_param in self.space:
+            for i, l in enumerate(self.space[hyper_param]):
+                key = hyper_param + "_" + str(l)
+                Dict[key] = i
+        return Dict
+
+        """
+    The helper method for creating a dictionary containing the position of the respective hyperparameter value in the enumered dictionary of space
 
     Returns:
         dict: hyperpamatername concatenated with its value ->key
               zero-based index position of the hyperparameter value in self.space (the hype) -> value
     """
-    Dict = {}
-    for hyper_param in self.space:
-      for i,l in enumerate(self.space[hyper_param]):
-        key = hyper_param + "_" + str(l)
-        Dict[key] = i
-    return Dict
 
-  def random_pick_from_neighbourhood_structure(self, initial_choice:dict)->dict:
-    """The method for picking a random hyperparameter set, in the form of a dictionary
+    def random_pick_from_neighbourhood_structure(self, initial_choice: dict) -> dict:
+        set_hp = {}
+        for hp in initial_choice:
+            key = str(hp) + "_" + str(initial_choice[hp])
+            hp_index = self.Neigh_dict[key]
+            idx = np.random.randint(-1, 2)
+            length = len(self.space[hp])
+            set_hp[hp] = self.space[hp][(hp_index + idx + length) % length]
+        return set_hp
 
-    Args:
-        initial_choice (dict): the initial choice of hyperparameters provided as a dictionary
+    def det_a_b(self, domain, max_eval, X=None, y=None):
+        """Computes the minimum and maximum values of the function represented by self,
+        using Stochastic Ruler with random samples from the given domain. This gives us (a,b) of the stochastic ruler
 
-    Returns:
-        dict: a randomly picked set of hyperparameters written as a dictionary
-    """
+        Args:
+            domain (dict): A dictionary that maps the names of the variables of the function represented by self to their domains,
+            which should be represented as lists or arrays of values.
+            max_eval (int): The maximum number of evaluations of the function to perform. The total number of evaluations will be
+            approximately max_eval, but may be slightly lower due to the fact that each iteration involves
+            len(domain) evaluations.
+            X (array-like or None, optional): An array of input values to pass to the function represented by self. Defaults to None.
+            y (array-like or None, optional): An array of target values to pass to the function represented by self. Defaults to None.
 
-    set_hp = {}
-    for hp in initial_choice:
-      key = str(hp) + "_" + str(initial_choice[hp])
-      hp_index = self.Neigh_dict[key]
-      idx = np.random.randint(-1,2)
-      length  = len(self.space[hp]) 
-      set_hp[hp]=(self.space[hp][(hp_index+idx+length)%length])
-    return set_hp
+        Returns:
+            tuple: This gives us (a,b) of the stochastic ruler
+        """
+        if self.lower_bound is not None and self.upper_bound is not None:
+            minm = self.lower_bound
+            maxm = self.upper_bound
 
+        else:
+            max_iter = (max_eval) // len(domain)
+        maxm = -1 * math.inf
+        minm = math.inf
+        neigh = {}
+        for i in range(max_iter):
+            for dom in domain:
+                neigh[dom] = np.random.choice(domain[dom])
+            val = self.run(neigh, neigh, X, y)
+            minm = min(minm, val)
+            maxm = max(maxm, val)
 
-  def ModelFunc(self,neigh:dict):
-    """ The function for calling the models from sklearn depending on the self.model_type string and the neighbourhood structure 
+        return (minm, maxm)
 
-    Args:
-        neigh (dict): the neighbourhood structure that needs to be traversed, provided in the form of a dictionary
-                      hyperpamatername concatenated with its value ->key
-                      zero-based index position of the hyperparameter value in self.space (the comprehensive set of values for the set of hyperparameters in the form of a dictionary)  -> value
+    def Mf(self, k: int) -> int:
+        """The method for represtenting the maximum number of failures allowed while iterating for the kth step in the Stochastic Ruler Method
+            In this case, we let Mk = floor(log_5 (k + 10)) for all k; this choice of the sequence {Mk} satisfies the guidelines specified by Yan and Mukai (1992)
+        Args:
+            k (int): the iteration number in the Stochastic Ruler Method
 
-    Returns:
-        MODEL: the respective method called from sklearn with the chosen hyperparameters
-    """
-    if(self.model_type == 'MLP'):
-      N = self.space['num_hidden_layers'][0]
-      hidden_layer_sizes = []
-      for i in range(N):
-        hidden_layer_sizes.append(neigh['hidden_layer_'+str(i)])
-      MODEL  = MLPClassifier(max_iter = 1000, solver = neigh['solver'], alpha = neigh['learning_rate'], hidden_layer_sizes = tuple(hidden_layer_sizes)) 
-    if(self.model_type == 'SVM'):
-      MODEL = SVC(kernel = neigh['kernel'],gamma = neigh['gamma'], C= neigh['C'],max_iter = 1000)
-    if(self.model_type == 'RFC'):
-      MODEL = RandomForestClassifier(max_depth=neigh['max_depth'],criterion =neigh['criterion'], n_estimators=neigh['n_estimators'])
-    if(self.model_type == 'DTC'):
-      MODEL = DecisionTreeClassifier(random_state=0)
-    if(self.model_type == 'GBC'):
-      MODEL = GradientBoostingClassifier(n_estimators=neigh['n_estimators'], learning_rate=neigh['learning_rate'],max_depth=neigh['max_depth'])
-    if(self.model_type == 'KNN'):
-      MODEL =  KNeighborsClassifier( n_neighbors =neigh['n_neighbors'],weights = neigh['weights'],metric= neigh['metric'])
-    if(self.model_type == 'user_defined'):
-      MODEL = self.func
-    return MODEL
+        Returns:
+            int: the maximum number for the number of iterations
+        """
 
-  
-  def det_a_b(self,domain,max_eval,X = None,y =None):
-    max_iter = (max_eval)//len(domain)
-    maxm = -1*math.inf
-    minm = math.inf
-    neigh={}
-    for i in range(max_iter):
-      for dom in domain:
-        neigh[dom] = np.random.choice(domain[dom])
-      val = self.run(neigh,neigh, X, y)
-      minm = min(minm,val)
-      maxm = max(maxm,val)
-    return (minm, maxm)
+        return int(math.log(k + 10, math.e) / math.log(5, math.e))
 
+    def SR_Algo(
+        self, X: np.ndarray = None, y: np.ndarray = None
+    ) -> Union[float, dict, float, float, List[float]]:
+        """The method that uses the Stochastic Ruler Method (Yan and Mukai 1992)
+           Step 0: Select a starting point Xo E S and let k = 0.
+           Step 1: Given xk = x, choose a candidate zk from N(x) randomly
+           Step 2: Given zk = z, draw a sample h(z) from H(z).
+           Then draw a sample u from U(a, b). If h(z) > u, then let X(k+1) = Xk and go to Step 3.
+           Otherwise dmw another sample h(z) from H(z) and draw another sample u from U(a, b).
+           If h(z) > u, then let X(k+1) = Xk and go to Step3.
+           Otherwise continue to draw and compare.
+           If all Mk tests, h(z) > u, fail, then accept the candidate zk and Set xk+1 = zk = Z.
 
-  def Mf(self,k:int)->int:
-    """The method for represtenting the maximum number of failures allowed while iterating for the kth step in the Stochastic Ruler Method
-        In this case, we let Mk = floor(log_5 (k + 10)) for all k; this choice of the sequence {Mk} satisfies the guidelines specified by Yan and Mukai (1992)
-    Args:
-        k (int): the iteration number in the Stochastic Ruler Method
+        Args:
+            X (np.ndarray): feature matrix
+            y (np.ndarray): label
 
-    Returns:
-        int: the maximum number for the number of iterations
-    """
-    return int(math.log(k+10,math.e)/math.log(5,math.e))
+        Returns:
+            Union[float,dict]: the minimum value of 1-accuracy and the corresponding optimal hyperparameter set
+        """
+        # X_train,X_test,y_train,y_test = self.data_preprocessing(X,y)
 
-  def SR_Algo(self,X:np.ndarray = None,y:np.ndarray = None) -> Union[float,dict,float,float]:
-    """The method that uses the Stochastic Ruler Method (Yan and Mukai 1992)
-       Step 0: Select a starting point Xo E S and let k = 0.
-       Step 1: Given xk = x, choose a candidate zk from N(x) randomly
-       Step 2: Given zk = z, draw a sample h(z) from H(z). 
-       Then draw a sample u from U(a, b). If h(z) > u, then let X(k+1) = Xk and go to Step 3. 
-       Otherwise dmw another sample h(z) from H(z) and draw another sample u from U(a, b).
-       If h(z) > u, then let X(k+1) = Xk and go to Step3. 
-       Otherwise continue to draw and compare. 
-       If all Mk tests, h(z) > u, fail, then accept the candidate zk and Set xk+1 = zk = Z. 
+        minh_of_z_tracker = []
 
-    Args:
-        X (np.ndarray): feature matrix
-        y (np.ndarray): label
+        if self.percentReduction is not None:
+            initial_choice_HP = {}
 
-    Returns:
-        Union[float,dict]: the minimum value of 1-accuracy and the corresponding optimal hyperparameter set
-    """
-    # X_train,X_test,y_train,y_test = self.data_preprocessing(X,y)
-    initial_choice_HP = {}
-    for i in self.space:
-      initial_choice_HP[i] = self.space[i][0]
-    
-    
-    # step 0: Select a starting point x0 in S and let k = 0
-    k = 1
-    x_k = initial_choice_HP
-    opt_x = x_k
-    a, b = self.det_a_b(self.space,self.maxevals//10,X,y)
-    # print(a,b)
-    minh_of_z = b
-    # step 0 ends here 
-    while(k<self.maxevals+1):
-      # print("minz"+str(minh_of_z))
-      # step 1:  Given xk = x, choose a candidate zk from N(x)
+            if self.init_solution is None:
+                for i in self.space:
+                    initial_choice_HP[i] = self.space[i][0]
+            else:
+                initial_choice_HP = self.init_solution
 
-      zk = self.random_pick_from_neighbourhood_structure(x_k)
-      # step 1 ends here
-      # step 2: Given zk = z, draw a sample h(z) from H(z)
-      iter = self.Mf(k)
-      for i in range(iter):
-        h_of_z = self.run(zk,zk,X,y)
-        
-        u = np.random.uniform(a,b) # Then draw a sample u from U(a, b)
-        
-        if(h_of_z>u): # If h(z) > u, then let xk+1 = xk and go to step 3.
-          k+=1 
-          if(h_of_z<minh_of_z):
-            minh_of_z = h_of_z
+            # printing initial value for checking
+            init_value = self.func(initial_choice_HP)
+            print(init_value)
+
+            # step 0: Select a starting point x0 in S and let k = 0
+            k = 1
+            x_k = initial_choice_HP
             opt_x = x_k
-          break
-        # Otherwise draw another sample h(z) from H(z) and draw another sample u from U(a, b), part of the loop where iter = self.Mf(k) tells the maximum number of failures allowed
-      if(h_of_z<u): # If all Mk tests have failed
-        x_k = zk
-        k+=1 
-        if(h_of_z<minh_of_z):
-            minh_of_z = h_of_z
-            opt_x = zk
-      # step 2 ends here
-      # step 3: k = k+1
-    return minh_of_z,opt_x,a,b
+            a, b = self.det_a_b(self.space, self.maxevals // 10, X, y)
+            # print(a,b)
+            minh_of_z = b
+            # step 0 ends here
+            while k < self.maxevals + 1:
+                # print("minz"+str(minh_of_z))
+                # step 1:  Given xk = x, choose a candidate zk from N(x)
 
-  def data_preprocessing(self,X:np.ndarray,y:np.ndarray)->Union[list, list, list, list]:
-    """The method for preprocessing and dividing the data into train and test using the train_test_split from sklearn,model_selection
+                zk = self.random_pick_from_neighbourhood_structure(x_k)
+                # step 1 ends here
+                # step 2: Given zk = z, draw a sample h(z) from H(z)
+                iter = self.Mf(k)
+                for i in range(iter):
+                    h_of_z = self.run(zk, zk, X, y)
+                    minh_of_z_tracker.append(minh_of_z)
 
-    Args:
-        X (np.ndarray): Feature Matrix in the form of numpy arrays
-        y (np.ndarray): label in the form of numpy arrays
+                    if init_value - h_of_z >= abs(
+                        init_value * self.percentReduction * 1 / 100
+                    ):
+                        print(
+                            "Stopping criterion of ",
+                            self.percentReduction,
+                            "% reduction in function value). Stopping optimization.",
+                        )
+                        return h_of_z, opt_x, a, b, minh_of_z_tracker
 
-    Returns:
-        Union[list, list, list, list]: returns X_train,X_test,y_train,y_test
-    """
-    scaler = StandardScaler()
-    X=scaler.fit_transform(X)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-    return X_train,X_test,y_train,y_test
+                    u = np.random.uniform(a, b)  # Then draw a sample u from U(a, b)
 
-  def fit(self,X:np.ndarray, y:np.ndarray)->Union[float,dict]: #for optimal hyperparams
-    """The method to find the optimal set of hyperparameters employing Stochastic Ruler method
+                    if h_of_z > u:  # If h(z) > u, then let xk+1 = xk and go to step 3.
+                        k += 1
+                        if h_of_z < minh_of_z:
+                            minh_of_z = h_of_z
+                            opt_x = x_k
+                        break
+                    # Otherwise draw another sample h(z) from H(z) and draw another sample u from U(a, b), part of the loop where iter = self.Mf(k) tells the maximum number of failures allowed
+                    if h_of_z < u:  # If all Mk tests have failed
+                        x_k = zk
+                        k += 1
+                        if h_of_z < minh_of_z:
+                            minh_of_z = h_of_z
+                            opt_x = zk
+                    
+                    
 
-    Args:
-        X (np.ndarray): Feature Matrix in the form of numpy arrays
-        y (np.ndarray): label in the form of numpy arrays
+                # step 2 ends here
+                # step 3: k = k+1
 
-    Returns:
-        Union[float,dict]: the minimum value of 1-accuracy and the corresponding optimal hyperparameter set
-    """
-    tracing_start()
-    start = time.time()
-    
-    self.data = {'X':X,'y':y}
-    result = self.SR_Algo(X,y)
-    end = time.time()
-    print("time elapsed {} milli seconds".format((end-start)*1000))
-    tracing_mem()
-    return result
-  
-  def optsol(self):
-    tracing_start()
-    start = time.time()
-    result = self.SR_Algo()
-    
-    end = time.time()
-    print("time elapsed {} milli seconds".format((end-start)*1000))
-    tracing_mem()
-    return result
+            return minh_of_z, opt_x, a, b, minh_of_z_tracker 
 
-  def run(self, opt_x ,neigh:dict,X:np.ndarray = None ,y:np.ndarray = None)->float:
-    """The (helper) method that instantiates the model function called from sklearn and returns the additive inverse of accuracy to be minimized
+        else:
+            print("No percentRedn criteria set:")
 
-    Args:
-        neigh (dict): helper dictionary with positions as values and the concatenated string of hyperparameter names and their values as their keys
-        X (np.ndarray): Feature Matrix in the form of numpy arrays
-        y (np.ndarray): label in the form of numpy arrays
+            initial_choice_HP = {}
 
-    Returns:
-        float: the additive inverse of accuracy to be minimized
-    """
-    ModelFun = self.ModelFunc(self.random_pick_from_neighbourhood_structure(neigh))
-    if self.prob_type == 'hyp_opt':
-      X_train,X_test,y_train,y_test = self.data_preprocessing(X,y)
-      ModelFun.fit(X_train,y_train)
-      y_pred = ModelFun.predict(X_test)
-      acc = ModelFun.score(X_test,y_test)
-      return 1-acc
-    if self.prob_type== 'opt_sol':
-      
-      funcval = self.func(opt_x)
-      
-      # print(funcval,opt_x)
-      return funcval
-    # print("acc" + str(acc))
+            if self.init_solution is None:
+                for i in self.space:
+                    initial_choice_HP[i] = self.space[i][0]
+            else:
+                initial_choice_HP = self.init_solution
+
+            # printing initial value for checking
+            init_value = self.func(initial_choice_HP)
+            print(init_value)
+
+            # step 0: Select a starting point x0 in S and let k = 0
+            k = 1
+            x_k = initial_choice_HP
+            opt_x = x_k
+            a, b = self.det_a_b(self.space, self.maxevals // 10, X, y)
+            # print(a,b)
+            minh_of_z = b
+            # step 0 ends here
+            while k < self.maxevals + 1:
+                # print("minz"+str(minh_of_z))
+                # step 1:  Given xk = x, choose a candidate zk from N(x)
+
+                zk = self.random_pick_from_neighbourhood_structure(x_k)
+                # step 1 ends here
+                # step 2: Given zk = z, draw a sample h(z) from H(z)
+                iter = self.Mf(k)
+                for i in range(iter):
+                    h_of_z = self.run(zk, zk, X, y)
+                    minh_of_z_tracker.append(minh_of_z)
+
+                    u = np.random.uniform(a, b)  # Then draw a sample u from U(a, b)
+
+                    if h_of_z > u:  # If h(z) > u, then let xk+1 = xk and go to step 3.
+                        k += 1
+                        if h_of_z < minh_of_z:
+                            minh_of_z = h_of_z
+                            opt_x = x_k
+                        break
+                    # Otherwise draw another sample h(z) from H(z) and draw another sample u from U(a, b), part of the loop where iter = self.Mf(k) tells the maximum number of failures allowed
+                    if h_of_z < u:  # If all Mk tests have failed
+                        x_k = zk
+                        k += 1
+                        if h_of_z < minh_of_z:
+                            minh_of_z = h_of_z
+                            opt_x = zk
+
+                # step 2 ends here
+                # step 3: k = k+1
+
+            return minh_of_z, opt_x, a, b, minh_of_z_tracker
+
+    def optsol(self):
+        """this gives the optimal solution for the problem using SR_Algo() method
+
+        Returns:
+            Union [float, dict]: the optimal solution represented as a dictionary and the corresponding value in float/int
+        """
+        # tracing_start()
+        start = time.time()
+        result = self.SR_Algo()
+
+        end = time.time()
+        print("time elapsed {} milli seconds".format((end - start) * 1000))
+        # tracing_mem()
+
+        return result
+
+    def run(
+        self, opt_x, neigh: dict, X: np.ndarray = None, y: np.ndarray = None
+    ) -> float:
+        """The (helper) method that instantiates the model function called from sklearn and returns the additive inverse of accuracy to be minimized
+
+        Args:
+            neigh (dict): helper dictionary with positions as values and the concatenated string of hyperparameter names and their values as their keys
+            X (np.ndarray): Feature Matrix in the form of numpy arrays
+            y (np.ndarray): label in the form of numpy arrays
+
+        Returns:
+            float: the additive inverse of accuracy to be minimized
+        """
+
+        if self.prob_type == "opt_sol":
+            funcval = self.func(opt_x)
+
+            # print(funcval,opt_x)
+            return funcval
+        # print("acc" + str(acc))
+
+    def plot_minh_of_z(self):
+        """Plot the variation of minh_of_z with each iteration."""
+        _, _, _, _, minh_of_z_tracker = self.SR_Algo()  # Call the modified SR_Algo method
+
+        plt.figure(figsize=(10, 6))
+        plt.plot(minh_of_z_tracker, marker='o', linestyle='-')
+        plt.xlabel('Iteration k')
+        plt.ylabel('minh_of_z')
+        plt.title('Variation of Objective Function Value with Each Iteration')
+        plt.grid(True)
+        plt.show()
+
     
 
