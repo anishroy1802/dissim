@@ -128,48 +128,25 @@ class SA():
                     self.R_prime[element][neighbor] = self.max_euclidean_value - euclidean(element, neighbor)
                     self.D[element] += self.R_prime[element][neighbor]
         else:
-            for element in self.solution_space:
-                self.R[element] = {}
-                self.R_prime[element] = {}
-                self.D[element] = 0
+            R = np.zeros((self.n, self.n))
+            R_prime = np.zeros((self.n, self.n))
 
-                for neighbor in self.neighborhoods[element]:
-                    self.R_prime[element][neighbor] = 1
-                    self.D[element] += 1
+            for i in range(self.n):
+                for j in range(self.n):
+                    if self.solution_space[i] in self.neighborhoods[self.solution_space[j]]:
+                        R[i][j] = 0.5
 
-        for element in self.solution_space:
-            for neighbor in self.neighborhoods[element]:
-                self.R[element][neighbor] = self.R_prime[element][neighbor] / self.D[element]
+                    if R[i][j]!=0:
+                        R_prime[i][j] = euclidean([self.solution_space[i]], [self.solution_space[j]])
+            
+        print("Transition Matrix:", R) 
+        return R_prime, R
 
-        #print(self.R)
-        return self.R_prime, self.R
-        # self.neighborhoods = self.create_neighborhood()
-        # self.D = {}
-        # self.R_prime = {}
-        # self.R = {}
-        # """
-        # initialize R matrix and R_prime matrix as a dictionary to store values of R(x, x') 
-        # for x' being a neighbour of x and vice versa
-        # """
-        # for element in self.solution_space:
-        #     self.R[element] = {}
-        #     self.R_prime[element] = {}
-        
-        # for element in self.solution_space:
-        #     if self.neighborhoods[element] is not None:
-        #         for neighbor in self.neighborhoods[element]:
-        #             if self.nbd_structure=="N1":
-        #                 self.R_prime[element][neighbor] = euclidean(element, neighbor)
-        #                 self.D[element] += euclidean(element, neighbor)
-        #             else:
-        #                 self.R_prime[element][neighbor] = 1
-        #                 self.D[element] += 1
-        
-        # for element in self.solution_space:
-        #     self.R[element][neighbor] = self.R_prime[element][neighbor]/self.D[element]
-
-        # return self.R_prime, self.R
-
+    
+    def j_from_x(self, x):
+        j = int(((x - self.domain_min) / (self.domain_max - self.domain_min)) * self.n)
+        return j
+    
     def optimize(self):
         self.R_prime, self.R = self.get_transition_matrix()
         
@@ -354,9 +331,7 @@ optimizer.print_function_values()
 # optimizer.optimize()
 #optimizer.print_function_values()
 
-# optimizer  = SA(dom = dom, step_size= step_size, T = 100, k = 100,
-#                          custom_H_function= func, nbd_structure= 'N2', 
-#                          random_seed= 42, percent_reduction=60)
-# optimizer.optimize()
-# optimizer.print_function_values()
-
+# Example usage
+optimizer = SA(domain_min=-1, domain_max=1, step_size=0.1, T=100,  custom_H_function=H, nbd_structure="N2", percent_reduction=10)
+optimizer.optimize()
+optimizer.print_function_values()
