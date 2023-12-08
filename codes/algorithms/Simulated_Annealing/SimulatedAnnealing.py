@@ -332,6 +332,6 @@ optimizer.print_function_values()
 #optimizer.print_function_values()
 
 # Example usage
-optimizer = SA(domain_min=-1, domain_max=1, step_size=0.1, T=100,  custom_H_function=H, nbd_structure="N2", percent_reduction=10)
-optimizer.optimize()
-optimizer.print_function_values()
+# optimizer = SA(domain_min=-1, domain_max=1, step_size=0.1, T=100,  custom_H_function=H, nbd_structure="N2", percent_reduction=10)
+# optimizer.optimize()
+# optimizer.print_function_values()
