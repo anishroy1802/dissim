@@ -1,28 +1,24 @@
 import dissim
 import numpy as np
+import matplotlib.pyplot as plt
+import math as mt
+import tracemalloc
+import pandas as pd
+import dask.dataframe as dd
+import time
+import random
 
-def func2(x):
-    x1, x2, x3, x4 = x[0], x[1], x[2], x[3]
-    return (x1 + 10 * x2)**2 + 5 * (x3 - x4)**2 + (x2 - 2 * x3)**4 + 10 * (x1 - x4)**4 + 1 + np.random.normal(0, 30)
+def objective_function(x):
+    noise = np.random.normal(scale=0.1)  # Add Gaussian noise with a standard deviation of 0.1
+    return 2*x[0] + x[0]**2 + x[1]**2 + x[2]*5+ noise
 
-initial_temperature = 100.0
-cooling_rate = 0.50
-num_iterations = 500
-step_size = 1.0
-domain_min = np.array([-100.0, -100.0, -100.0, -100.0])  # Minimum values for x[0] x[1] x[2] x[3]
-domain_max = np.array([100.0, 100.0, 100.0, 100.0])  # Maximum values for x[0] x[1] x[2] x[3]
+#main()
+dom = [[0,2], [0,2], [0,2]]
+step_size = [0.1, 0.2,0.5]
+T= 100
+k= 100
 
-# Create and run the Simulated Annealing instance
-sa_algorithm = dissim.SA(func2, initial_temperature, cooling_rate, num_iterations, step_size, domain_min, domain_max)
-sa_algorithm.run()
-
-# Print details about the number of iterations
-print("Number of iterations:", len(sa_algorithm.history))
-
-# Print optimal x and minimum value
-result_x, result_min = sa_algorithm.history[-1]
-print("Optimal x:", result_x)
-print("Minimum value (with noise):", result_min)
-
-# Plot the objective function variation over iterations
-sa_algorithm.plot_objective_variation()
+optimizer  = dissim.SA(domain = dom, step_size= step_size, T = 100, k = 25,
+                         custom_H_function= objective_function, nbd_structure= 'N1', percent_reduction= 80)
+optimizer.optimize()
+#optimizer.print_function_values()

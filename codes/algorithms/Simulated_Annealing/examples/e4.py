@@ -42,9 +42,9 @@ step_size = [1]*len(dom)
 T= 100
 k= 100
 
-optimizer  = dissim.SA(dom = dom, step_size= step_size, T = 100, k = 50,
+optimizer  = dissim.SA(domain = dom, step_size= step_size, T = 100, k = 50,
                          custom_H_function= e4_wrapper, nbd_structure= 'N1', 
-                         random_seed= 42, percent_reduction=40)
+                          percent_reduction=40)
 
 optimizer.optimize()
 optimizer.print_function_values()

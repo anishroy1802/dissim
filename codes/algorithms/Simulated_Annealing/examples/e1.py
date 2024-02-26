@@ -10,27 +10,15 @@ import random
 #Define your noisy multivariable function here
 def objective_function(x):
     noise = np.random.normal(scale=0.1)  # Add Gaussian noise with a standard deviation of 0.1
-    return x[0]**2 + x[1]**2 + noise
+    return 2*x[0] + x[0]**2 + x[1]**2 + noise
 
-# Parameters
-initial_temperature = 100.0
-cooling_rate = 0.95
-num_iterations = 100
-step_size = 0.1
-domain_min = np.array([-1.0, 0.0])  # Minimum values for x[0] and x[1]
-domain_max = np.array([4.0, 10.0])  # Maximum values for x[0] and x[1]
+#main()
+dom = [[0,2], [0,2]]
+step_size = [0.1, 0.2]
+T= 100
+k= 100
 
-# # Create and run the Simulated Annealing instance
-sa_algorithm = dissim.SA(objective_function, initial_temperature, cooling_rate, num_iterations, step_size, domain_min, domain_max)
-sa_algorithm.run()
-
-# Print details about number of iterations
-print("Number of iterations:", len(sa_algorithm.history))
-
-# Print optimal x and minimum value
-result_x, result_min = sa_algorithm.history[-1]
-print("Optimal x:", result_x)
-print("Minimum value (with noise):", result_min)
-
-# Plot the objective function variation over iterations
-sa_algorithm.plot_objective_variation()
+optimizer  = dissim.SA(domain = dom, step_size= step_size, T = 100, k = 25,
+                         custom_H_function= objective_function, nbd_structure= 'N1', percent_reduction= 80)
+optimizer.optimize()
+#optimizer.print_function_values()
