@@ -1,13 +1,20 @@
-import dissim
-from sklearn import datasets
+# Multimodal function 
 
-KNNspace ={ 'n_neighbors' : [5,7,9,11,13,15],
-               'weights' : ['uniform','distance'],
-               'metric' : ['minkowski','euclidean','manhattan']}
-KNNsr = dissim.stochastic_ruler(KNNspace , 'KNN' ,100)
+import numpy as np
+import dissim as ds
 
-digits = datasets.load_digits()
-X_2 = digits.data[:, :-1]
-y_2 = digits.target
-result= (KNNsr.fit(X_2,y_2))
-print(result)
+
+def func(x0):
+    x1, x2 = x0["x1"], x0["x2"]
+
+    def multinodal(x):
+        return (np.sin(0.05 * np.pi * x) ** 6) / 2 ** (2 * ((x - 10) / 80) ** 2)
+
+    return -(multinodal(x1) + multinodal(x2)) + np.random.normal(0, 0.3)
+
+
+dom = {"x1": [i for i in range(101)], "x2": [i for i in range(101)]}
+
+sr_userDef = ds.stochastic_ruler(space=dom, maxevals=1000, prob_type="opt_sol", percentReduction=80, func=func, neigh_structure=2)
+print(sr_userDef.optsol())
+sr_userDef.plot_minh_of_z()

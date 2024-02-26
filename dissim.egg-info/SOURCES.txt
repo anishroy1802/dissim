@@ -19,7 +19,3 @@ dissim.egg-info/SOURCES.txt
 dissim.egg-info/dependency_links.txt
 dissim.egg-info/requires.txt
 dissim.egg-info/top_level.txt
-dist/dissim-0.1-py3-none-any.whl
-dist/dissim-0.1.1-py3-none-any.whl
-dist/dissim-0.1.1.tar.gz
-dist/dissim-0.1.tar.gz

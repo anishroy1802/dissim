@@ -1,29 +1,14 @@
-import dissim
 import numpy as np
-def ex3(x):
-  if x['x'] ==1:
-    f= 0.3
-  elif x['x']==2:
-    f= 0.7
-  elif x['x']==3:
-    f = 0.9
-  elif x['x']==4:
-    f = 0.5
-  elif x['x']==5:
-    f = 1
-  elif x['x']==6:
-    f = 1.4
-  elif x['x']==7:
-    f = 0.7
-  elif x['x']==8:
-    f = 0.8
-  elif x['x']==9:
-    f = 0
-  elif x['x']==10:
-    f = 0.6
-  return f+np.random.uniform(-0.5,0.5)
+import dissim as ds
 
-dom = {'x': [i for i in range(1,11)]}
+def func2(x):
+  x1,x2,x3,x4 = x['x1'],x['x2'], x['x3'],x['x4']
+  return (x1+10*x2)**2 + 5* (x3-x4)**2 + (x2-2*x3)**4 + 10*(x1-x4)**4 + 1 +np.random.normal(0,30)
 
-sr_userdef2 = dissim.stochastic_ruler(dom,'user_defined', 1000, 'opt_sol', ex3)
-print(sr_userdef2.optsol())
+dom3 = {'x1':[i for i in range(20)],'x2':[i for i in range(20)],'x3':
+       [i for i in range(20)],'x4':[i for i in range(20)]}
+sr_userDef3 = ds.stochastic_ruler(space = dom3, maxevals = 100, prob_type = 'opt_sol', func = func2, percentReduction = 50)
+print(sr_userDef3.optsol())
+sr_userDef3.plot_minh_of_z()
+
+

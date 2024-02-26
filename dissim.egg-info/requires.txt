@@ -3,3 +3,4 @@ scikit-learn
 pandas
 dask
 matplotlib
+scipy

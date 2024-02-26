@@ -1,14 +1,21 @@
 import dissim
 import numpy as np
-def func2(x):
-  x1,x2,x3,x4 = x[0],x[1], x[2],x[3]
-  return (x1+10*x2)**2 + 5* (x3-x4)**2 + (x2-2*x3)**4 + 10*(x1-x4)**4 + 1 +np.random.normal(0,30)
 
+def func10d(x):
+    n = len(x)
+    result = 0
+    for i in range(n):
+        result += x[i]**2
+    result += (x[0] + 10*x[1])**2 + 5*(x[2] - x[3])**2 + (x[1] - 2*x[2])**4 + 10*(x[0] - x[3])**4 + 14*np.sum(x[:5]) + np.random.normal(0, 30)
+    return result
 
-dom = [[-100,100],[-100,100],[-100,100],[-100,100]]
-init = [5,4,3,2]
-func2AHA = dissim.AHA(func2,dom)
-a = func2AHA.AHAalgolocal(100,4000,dom,init)
-# print(a)
-print(a[-1])
-print(func2(a[-1]))
+dom10d = [[-100, 100]] * 10  # Define domain for 10 dimensions
+init10d = [1] * 10  # Initial guess for 10 dimensions
+
+func10d_AHA = dissim.AHA(func10d, dom10d, percent=60)
+result = func10d_AHA.AHAalgolocal(100, dom10d, init10d, 4000)
+
+print("Optimal solution:", result[-1])
+print("Function value at optimal solution:", func10d(result[-1]))
+
+func10d_AHA.plot_iterations()

@@ -322,9 +322,9 @@ def facility_loc(x):
   return sum(avg_dist_daywise)/T0
 
 
-init = [2,2,2,2,2,2]
-dom = [[1,7]]*6
-func1AHA = AHA(facility_loc,dom, percent=60)
+init = [2,2]
+dom = [[1,7]]*2
+func1AHA = AHA(func1,dom, percent=60)
 a = func1AHA.AHAalgolocal(50,dom,init, 100)
 
 func1AHA.plot_iterations()

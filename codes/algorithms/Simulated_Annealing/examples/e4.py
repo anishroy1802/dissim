@@ -11,12 +11,21 @@ eng = matlab.engine.start_matlab()
 eng.addpath(matlab_script_folder)
 
 def e4_wrapper(x):
-    # Call the MATLAB e4 function and return the result as a Python float
-    result = eng.e4(matlab.double(x), nargout=1)
+    try:
+        # Convert x to a numpy array and then to a Python list of doubles
+        x_double = np.array(x, dtype=float).tolist()
+        
+        # Call the MATLAB e4 function and return the result as a Python float
+        result = eng.e4(matlab.double(x_double), nargout=1)
 
-    noise = np.random.normal(0, 0.3)  # Mean = 0, Standard Deviation = 0.3
-    result_with_noise = float(result) + noise
-    return result_with_noise
+        noise = np.random.normal(0, 0.3)  # Mean = 0, Standard Deviation = 0.3
+        result_with_noise = float(result) + noise
+        return result_with_noise
+
+    except matlab.engine.MatlabExecutionError as e:
+        print(f'MATLAB Error: {e}')
+        # Handle the error as needed
+        return 0  # Default value or alternative handling
 
 # Generate random noise 
 # def generate_noise():
@@ -28,28 +37,17 @@ def e4_wrapper(x):
 #     return noise
 
 # Initial parameters for Simulated Annealing
-initial_temperature = 100.0
-cooling_rate = 0.5
-num_iterations = 500
-step_size = 0.2
-domain_min = [0.0, 0.0]  # Minimum values for x[0] and x[1]
-domain_max = [100.0, 100.0]  # Maximum values for x[0] and x[1]
+dom = [[1,20]]*2
+step_size = [1]*len(dom)
+T= 100
+k= 100
 
-#noise = generate_noise()
-# Run the Simulated Annealing instance
-sa_algorithm = dissim.SA(e4_wrapper, initial_temperature, cooling_rate, num_iterations, step_size, domain_min, domain_max)
-sa_algorithm.run()
+optimizer  = dissim.SA(dom = dom, step_size= step_size, T = 100, k = 50,
+                         custom_H_function= e4_wrapper, nbd_structure= 'N1', 
+                         random_seed= 42, percent_reduction=40)
 
-# Print details about the number of iterations
-print("Number of iterations:", len(sa_algorithm.history))
-
-# Print the optimal x and minimum value
-result_x, result_min = sa_algorithm.history[-1]
-print("Optimal x:", result_x)
-print("Minimum value (with noise):", result_min)
-
-# Plot the objective function variation over iterations
-sa_algorithm.plot_objective_variation()
+optimizer.optimize()
+optimizer.print_function_values()
 
 # Close the MATLAB Engine
 eng.quit()

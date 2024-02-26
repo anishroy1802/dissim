@@ -5,7 +5,7 @@ In this section, we import several essential Python libraries that will be used 
  - 'tracemalloc' is used to monitor memory usage and allocation during code execution.
  - 'matplotlib.pyplot' (imported as 'plt') allows for creating various plots and visualizations.
  - 'math' provides a set of mathematical functions and constants for use in calculations."""
-
+import matlab.engine
 import numpy as np
 from scipy.spatial.distance import euclidean
 import tracemalloc
@@ -13,6 +13,15 @@ import matplotlib.pyplot as plt
 import math
 import itertools
 import random
+from mrg32k3a.mrg32k3a import MRG32k3a
+
+#Get the folder path where filename is located
+matlab_script_folder = r'C:\Users\hp\dissim\codes\algorithms\Simulated_Annealing\examples'
+
+# Initialize the MATLAB Engine
+# eng = matlab.engine.start_matlab()
+# # Add the folder containing 'e4.m' to the MATLAB path
+# eng.addpath(matlab_script_folder)
 
 """Memory Tracing:
  The 'tracing_start' function is defined to manage memory tracing. It begins by stopping any ongoing memory tracing using 'tracemalloc.stop()' and checking if tracing is currently active with 'tracemalloc.is_tracing()'. Afterward, it starts memory tracing with 'tracemalloc.start()' and checks the tracing status again. This function is invaluable for profiling memory usage, enabling developers to gain insights into memory allocation and deallocation patterns during code execution. It can help identify potential memory-related issues and optimize memory usage in the application."""
@@ -23,17 +32,26 @@ def tracing_start():
     tracemalloc.start()
     print("Tracing Status: ", tracemalloc.is_tracing())
 
-class SA_multidim():
+# def matlab_to_python_wrapper(func_name,x): 
+#     result = eng.func_name(matlab.double(x), nargout=1)
+#     noise = np.random.normal(0, 0.3)  # Mean = 0, Standard Deviation = 0.3
+#     result_with_noise = float(result) + noise
+#     return result_with_noise
 
-    def __init__(self, domain, step_size, T, custom_H_function, nbd_structure, k= 300, percent_reduction=None, initial_solution=None, random_seed=None):
+class SA():
 
-        self.domain = domain #n*2 matrix
+    def __init__(self, dom, step_size, T, custom_H_function, nbd_structure, k= 300, platform = "python", crn = True, percent_reduction=None, initial_solution=None, random_seed=None):
+
+        self.platform = platform #platform can be "python" or "matlab"
+        self.custom_H_function = custom_H_function
+        self.filename = self.custom_H_function.__name__
+        self.domain = dom #n*2 matrix
         self.dimensions = len(self.domain)
+        self.crn = crn
         print("Number of dimensions:", self.dimensions)
         self.step_size = step_size #n*1 matrix
         self.T = T
         self.k = k
-        self.custom_H_function = custom_H_function
         self.L = [i + 200 for i in range(0, k)]
         self.initial_solution = initial_solution
         self.random_seed = random_seed
@@ -42,8 +60,9 @@ class SA_multidim():
         self.function_values = []
         self.initial_function_value = None  # Store the initial function value
         self.percent_reduction = percent_reduction
-        self.max_euclidean_value = math.sqrt(sum(element[1]**2 - element[0]**2 for element in dom))
+        self.max_euclidean_value = math.sqrt(sum(element[1]**2 - element[0]**2 for element in self.domain))
         self.history = []
+        
 
         n =  self.dimensions
         # Calculate the number of values (M) within each dimension
@@ -111,50 +130,29 @@ class SA_multidim():
                     self.R_prime[element][neighbor] = self.max_euclidean_value - euclidean(element, neighbor)
                     self.D[element] += self.R_prime[element][neighbor]
         else:
-            for element in self.solution_space:
-                self.R[element] = {}
-                self.R_prime[element] = {}
-                self.D[element] = 0
+            R = np.zeros((self.n, self.n))
+            R_prime = np.zeros((self.n, self.n))
 
-                for neighbor in self.neighborhoods[element]:
-                    self.R_prime[element][neighbor] = 1
-                    self.D[element] += 1
+            for i in range(self.n):
+                for j in range(self.n):
+                    if self.solution_space[i] in self.neighborhoods[self.solution_space[j]]:
+                        R[i][j] = 0.5
 
-        for element in self.solution_space:
-            for neighbor in self.neighborhoods[element]:
-                self.R[element][neighbor] = self.R_prime[element][neighbor] / self.D[element]
+                    if R[i][j]!=0:
+                        R_prime[i][j] = euclidean([self.solution_space[i]], [self.solution_space[j]])
+            
+        print("Transition Matrix:", R) 
+        return R_prime, R
 
-        #print(self.R)
-        return self.R_prime, self.R
-        # self.neighborhoods = self.create_neighborhood()
-        # self.D = {}
-        # self.R_prime = {}
-        # self.R = {}
-        # """
-        # initialize R matrix and R_prime matrix as a dictionary to store values of R(x, x') 
-        # for x' being a neighbour of x and vice versa
-        # """
-        # for element in self.solution_space:
-        #     self.R[element] = {}
-        #     self.R_prime[element] = {}
-        
-        # for element in self.solution_space:
-        #     if self.neighborhoods[element] is not None:
-        #         for neighbor in self.neighborhoods[element]:
-        #             if self.nbd_structure=="N1":
-        #                 self.R_prime[element][neighbor] = euclidean(element, neighbor)
-        #                 self.D[element] += euclidean(element, neighbor)
-        #             else:
-        #                 self.R_prime[element][neighbor] = 1
-        #                 self.D[element] += 1
-        
-        # for element in self.solution_space:
-        #     self.R[element][neighbor] = self.R_prime[element][neighbor]/self.D[element]
-
-        # return self.R_prime, self.R
-
+    
+    def j_from_x(self, x):
+        j = int(((x - self.domain_min) / (self.domain_max - self.domain_min)) * self.n)
+        return j
+    
     def optimize(self):
-        #self.neighborhoods = self.create_neighborhood()
+        """
+        Use CRN here to reduce variance
+        """
         self.R_prime, self.R = self.get_transition_matrix()
         
         #for convenience convert the dictionary to an array
@@ -212,6 +210,9 @@ class SA_multidim():
             fx = 0
             fz = 0
 
+            """
+            Use CRN algorithm here if yes, otherwise normal
+            """
             for sim_iter in range(self.L[j]):
                 fx += self.custom_H_function(list(x_j))
                 fz += self.custom_H_function(list(z_j))
@@ -238,11 +239,16 @@ class SA_multidim():
             D_x_next = self.D[x_next]
             x_opt_next = x_next if self.V[x_next] / D_x_next > self.V[x_next] / self.D[x_j] else x_j
             self.X_opt.append(x_opt_next)
-
+            
             # Calculate and store the function value for this iteration
             current_function_value = self.custom_H_function(list(x_opt_next))
             self.function_values.append(current_function_value)
 
+            """
+                Reset substream or advance substream according to CRN True or False
+                work in progress
+            """
+    
             #if self.percent_reduction is not None:
             if self.initial_function_value is None:
                 self.initial_function_value = current_function_value
@@ -251,6 +257,8 @@ class SA_multidim():
                     if ((self.initial_function_value - current_function_value) >= abs(self.initial_function_value) * (self.percent_reduction/100)):
                         print("Stopping criterion of " ,self.percent_reduction,   "% reduction in function value). Stopping optimization.")
                         break
+
+            
 
         # Plot the function value vs. iteration
         plt.figure(figsize=(10, 6))
@@ -271,65 +279,104 @@ class SA_multidim():
         # print("final:", self.function_values[-1])
         print("final optimal value: ", self.X_opt[-1])
         print("% reduction:",  100*(self.function_values[0] -  self.function_values[-1])/abs(self.function_values[0]))
-        #print(self.function_values)
+        print(self.X_opt)
 
-def objective_function(x):
-    noise = np.random.normal(scale=0.1)  # Add Gaussian noise with a standard deviation of 0.1
+
+
+
+
+
+crn_value = random.choice([True, False])
+
+def objective_function(x, crn_value=crn_value):
+    if not crn_value: 
+        noise = np.random.normal(scale=0.1)
+    else:
+        rng = MRG32k3a(s_ss_sss_index=[1, 2, 3])
+        noise = rng.normalvariate(mu=0, sigma=0.1)
+
     return 2*x[0] + x[0]**2 + x[1]**2 + noise
 
-def func(x0):
-  x1,x2 = x0[0],x0[1]
-  def multinodal(x):
-    return (np.sin(0.05*np.pi*x)**6)/2**(2*((x-10)/80)**2)
+def func(x0, crn_value=crn_value):
+    if not crn_value: 
+        noise = np.random.normal(scale=0.3)
+    else:
+        rng = MRG32k3a(s_ss_sss_index=[1, 2, 3])
+        noise = rng.normalvariate(mu=0, sigma=0.3)
 
-  return -(multinodal(x1)+multinodal(x2))+np.random.normal(0,0.3)
+    x1,x2 = x0[0],x0[1]
+    def multinodal(x):
+        return (np.sin(0.05*np.pi*x)**6)/2**(2*((x-10)/80)**2)
 
-def func2(x):
-  x1,x2,x3,x4 = x[0],x[1], x[2],x[3]
-  return (x1+10*x2)**2 + 5* (x3-x4)**2 + (x2-2*x3)**4 + 10*(x1-x4)**4 
-  + 1 +np.random.normal(0,30)
+    return -(multinodal(x1)+multinodal(x2))+noise
+
+def func2(x, crn_value = crn_value):
+    if not crn_value: 
+        noise = np.random.normal(scale=30)
+    else:
+        rng = MRG32k3a(s_ss_sss_index=[1, 2, 3])
+        noise = rng.normalvariate(mu=0, sigma=30)
+
+    x1,x2,x3,x4 = x[0],x[1], x[2],x[3]
+    return (x1+10*x2)**2 + 5* (x3-x4)**2 + (x2-2*x3)**4 + 10*(x1-x4)**4 + 1 +noise
+
 #main()
-dom = [[0,2], [0,2],[0,2],[0,2]]
-step_size = [0.4, 0.5,0.4,0.5]
+
+def facility_loc(x, crn_value = crn_value):
+  #normal demand
+  if crn_value:
+      rng = MRG32k3a(s_ss_sss_index=[1, 2, 3])
+      noise = rng.normalvariate(mu=180, sigma=30)
+  else:
+      noise = np.random.normal(180, 30, size=1)[0]
+
+  X1,Y1 = x[0],x[1] 
+  X2,Y2 = x[2],x[3] 
+  X3,Y3 = x[4],x[5] 
+  avg_dist_daywise = []
+  T0 = 30
+  n = 6
+  for t in range(T0):
+      total_day = 0                  ##### total distance travelled by people
+      ###### now finding nearest facility and saving total distance 
+      #travelled in each entry of data
+      for i in range(n):
+          for j in range(n):
+              demand=-1
+              while(demand<0):    
+                  demand = noise
+              total_day += demand*min(abs(X1-i)+abs(Y1-j) ,
+                                      abs(X2-i)+abs(Y2-j),abs(X3-i)+abs(Y3-j) ) 
+              ### total distance from i,j th location to nearest facility
+      avg_dist_daywise.append(total_day/(n*n))    
+  return sum(avg_dist_daywise)/T0
+
+
+dom = [[1,4]]*6
+step_size = [1]*len(dom)
 T= 100
 k= 100
 
 
-optimizer  = SA_multidim(domain = dom, step_size= step_size, T = 100, k = 100,
-                         custom_H_function= func2, nbd_structure= 'N1', 
-                         random_seed= 42, percent_reduction=60)
+optimizer  = SA(dom = dom, step_size= step_size, T = 100, k = 50,
+                         custom_H_function= facility_loc, nbd_structure= 'N1', 
+                         random_seed= 42, percent_reduction=40, crn = crn_value)
 optimizer.optimize()
 optimizer.print_function_values()
 
-optimizer  = SA_multidim(domain = dom, step_size= step_size, T = 100, k = 100,
-                         custom_H_function= func2, nbd_structure= 'N2', 
-                         random_seed= 42, percent_reduction=60)
+
+optimizer  = SA(dom = dom, step_size= step_size, T = 100, k = 50,
+                         custom_H_function= facility_loc, nbd_structure= 'N2', 
+                         random_seed= 42, percent_reduction=40, crn = crn_value)
 optimizer.optimize()
 optimizer.print_function_values()
+# optimizer  = SA(dom = dom, step_size= step_size, T = 100, k = 100,
+#                          custom_H_function= facility_loc, nbd_structure= 'N2', 
+#                          random_seed= 42, percent_reduction=60, platform= 'matlab')
+# optimizer.optimize()
+#optimizer.print_function_values()
 
-# optimizer  = SA_multidim(domain = dom, step_size= step_size, T = 100, k = 100,
-#                          custom_H_function= objective_function, nbd_structure= 'N1', percent_reduction= 60,
-#                          initial_solution= (0,1))
+# Example usage
+# optimizer = SA(domain_min=-1, domain_max=1, step_size=0.1, T=100,  custom_H_function=H, nbd_structure="N2", percent_reduction=10)
 # optimizer.optimize()
 # optimizer.print_function_values()
-
-
-# optimizer  = SA_multidim(domain = dom, step_size= step_size, T = 100, k = 100,
-#                          custom_H_function= objective_function, nbd_structure= 'N2', percent_reduction= 80)
-# optimizer.optimize()
-# optimizer.print_function_values()
-
-# optimizer  = SA_multidim(domain = dom, step_size= step_size, T = 100, k = 100,
-#                          custom_H_function= objective_function, nbd_structure= 'N1')
-# optimizer.optimize()
-# optimizer.print_function_values()
-
-
-# optimizer  = SA_multidim(domain = dom, step_size= step_size, T = 100, k = 100,
-#                          custom_H_function= objective_function, nbd_structure= 'N2')
-# optimizer.optimize()
-# optimizer.print_function_values()
-
-
-
-
