@@ -23,7 +23,7 @@
   `matplotlib`
  You can install these packages using pip by running `pip install numpy scikit-learn pandas dask matplotlib`
 ## Installation 
- To install `dissim`, download the `dissim-0.1.3-py3-none-any.whl` [file](https://github.com/nkusharoraa/dissim/raw/main/dissim-0.1.3-py3-none-any.whl) from the root folder of the repository and run `pip install ./dissim-0.1.3-py3-none-any.whl` in the same folder.
+ To install `dissim`, download the `dissim-0.1.3-py3-none-any.whl` [file](https://github.com/anishroy1802/dissim/blob/main/dist/dissim-0.1.3-py3-none-any.whl) from the root folder of the repository and run `pip install ./dissim-0.1.3-py3-none-any.whl` in the same folder.
 ## Usage
  Example files for using the algorithms in this package can be found [here](https://github.com/nkusharoraa/dissim/tree/main/codes/algorithms/Adaptive_Hyperbox_Algorithm/examples) and [here](https://github.com/nkusharoraa/dissim/tree/main/codes/algorithms/Stochastic_Ruler_Algorithm/examples).
 
