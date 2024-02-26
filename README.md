@@ -88,7 +88,6 @@
    |-- dissim-0.1.3-py3-none-any.whl
    |-- dissim-0.1.3.tar.gz
 |-- setup.py
-|-- tree_structure.txt
 
 ```
 [Contact Us](mailto:nkusharoraa@gmail.com)
