@@ -30,6 +30,6 @@ def facility_loc(x):
 dom5 = {'x1' : [i for i in range(1,7)], 'y1':[i for i in range(1,7)],
        'x2' : [i for i in range(1,7)], 'y2':[i for i in range(1,7)],
        'x3' : [i for i in range(1,7)], 'y3':[i for i in range(1,7)]}
-sr_userdef5 = ds.stochastic_ruler(space = dom5, maxevals = 400, prob_type = 'opt_sol',func = facility_loc)
+sr_userdef5 = ds.stochastic_ruler(space = dom5, maxevals = 10, prob_type = 'opt_sol',func = facility_loc, neigh_structure=2)
 print(sr_userdef5.optsol())
 sr_userdef5.plot_minh_of_z()

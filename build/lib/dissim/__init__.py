@@ -304,7 +304,7 @@ def tracing_mem():
     print("Peak Size in MB - ", peak)
 
 class AHA():
-  def __init__(self, func,global_domain):
+  def __init__(self, func,global_domain, percent = None):
     """Constructor method that initializes the instance variables of the class AHA
 
     Args:
@@ -312,6 +312,7 @@ class AHA():
       global_domain (list of lists): A list of intervals (list of two integers) that defines the search space for the optimization problem.
     """
     self.func = func
+    self.percent = percent
     self.global_domain = global_domain
     # self.initial_choice = initial_choice
     self.x_star = []
@@ -388,7 +389,7 @@ class AHA():
 
 
 
-  def AHAalgolocal(self,max_k,m,loc_domain,x0):
+  def AHAalgolocal(self,m,loc_domain,x0, max_k = 100):
     """ Runs the AHA algorithm for local optimization.
 
     Args:
@@ -402,7 +403,14 @@ class AHA():
     """
     #initialisation
     # print(x0)
+    tracing_start()
+    start = time.time()
+    
+    
+    
     self.x_star.append(x0)
+    self.initval = self.func(x0)
+    #print(self.initval)
     epsilon = []
     epsilon.append([x0])
     G = 0
@@ -452,11 +460,33 @@ class AHA():
         if(G_bar_best>g_val_bar):
           G_bar_best = g_val_bar
           x_star_k = list(i)
+
       self.x_star.append(x_star_k)
+      self.decrease = 100*(self.initval - self.func(x_star_k) )/ abs(self.initval)
       epsilon.append(epsilonk)
+      if ((self.percent is not None) and (self.decrease >= self.percent*0.01*abs(self.initval))):
+        print("Stopping criterion met (% reduction in function value). Stopping optimization.")
+        break
 
-
+    end = time.time()
+    print("time elapsed {} milli seconds".format((end-start)*1000))
+    tracing_mem()
     return self.x_star
+  
+  def plot_iterations(self):
+
+    print("iters:",len(self.x_star))
+    print("% decrease:", self.decrease )
+    func_values = [self.func(x) for x in self.x_star]  # Evaluate the function for each solution
+    plt.figure(figsize=(10, 6))
+    plt.plot(range(len(self.x_star)), func_values, marker='o', linestyle='-')
+    plt.xlabel('Iteration')
+    plt.ylabel('Function Value')
+    plt.title('Function Value vs. Iteration')
+    plt.grid(True)
+    plt.show()
+
+
   def AHAalgoglobal(self,iter,max_k,m):
     """ Runs the AHA algorithm for global optimization.
 
@@ -539,8 +569,6 @@ class AHA():
 
     return all_sols,best_sol,best_val
   
-
-
 #### Stochastic Ruler Algorithm
 
 def tracing_start():
