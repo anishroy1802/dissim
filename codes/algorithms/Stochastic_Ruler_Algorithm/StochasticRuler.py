@@ -200,6 +200,8 @@ class stochastic_ruler:
             x_k = initial_choice_HP
             opt_x = x_k
             a, b = self.det_a_b(self.space, self.maxevals // 10, X, y)
+            a = -2
+            b = 1
             # print(a,b)
             minh_of_z = b
             # step 0 ends here
@@ -259,7 +261,6 @@ class stochastic_ruler:
 
         else:
             print("No percentRedn criteria set:")
-
             initial_choice_HP = {}
 
             if self.init_solution is None:
@@ -277,6 +278,8 @@ class stochastic_ruler:
             x_k = initial_choice_HP
             opt_x = x_k
             a, b = self.det_a_b(self.space, self.maxevals // 10, X, y)
+            a = -2
+            b= 1
             # print(a,b)
             minh_of_z = b
             # step 0 ends here
@@ -371,3 +374,19 @@ class stochastic_ruler:
         plt.title('Variation of Objective Function Value with Each Iteration')
         plt.grid(True)
         plt.show()
+
+
+def func(x0):
+    x1, x2 = x0["x1"], x0["x2"]
+
+    def multinodal(x):
+        return (np.sin(0.05 * np.pi * x) ** 6) / 2 ** (2 * ((x - 10) / 80) ** 2)
+
+    return -(multinodal(x1) + multinodal(x2)) + np.random.normal(0, 0.3)
+
+
+dom = {"x1": [i for i in range(101)], "x2": [i for i in range(101)]}
+
+sr_userDef = stochastic_ruler(space=dom, maxevals=20, prob_type="opt_sol", func=func, neigh_structure=1)
+print(sr_userDef.optsol())
+sr_userDef.plot_minh_of_z()

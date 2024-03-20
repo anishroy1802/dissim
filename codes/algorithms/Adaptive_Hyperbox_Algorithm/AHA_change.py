@@ -16,6 +16,7 @@ def tracing_mem():
     first_size, first_peak = tracemalloc.get_traced_memory()
     peak = first_peak/(1024*1024)
     print("Peak Size in MB - ", peak)
+
 class AHA():
   def __init__(self, func,global_domain, percent = None):
     """Constructor method that initializes the instance variables of the class AHA
@@ -102,11 +103,11 @@ class AHA():
 
 
 
-  def AHAalgolocal(self,m,loc_domain,x0, max_k = 100):
+  def AHAalgolocal(self,m,loc_domain,x0, max_k = 500):
     """ Runs the AHA algorithm for local optimization.
 
     Args:
-        max_k (int): The maximum number of iterations to run.
+        max_k (int): The maximum number of replications of simulation to run.
         m (int): The number of random samples to generate at each iteration.
         loc_domain (list of lists): A list of intervals (list of two integers) that defines the local search space.
         x0 (list): A list of integers representing the initial solution.
@@ -116,21 +117,31 @@ class AHA():
     """
     #initialisation
     # print(x0)
+    self.x0 = x0
+    if max_k < 200:
+       print("Error: too less simulation budget")
     tracing_start()
     start = time.time()
-    
-    
-    
+    self.fxvals = []
+    self.fx_star = []
+    self.all_x = []
+    self.all_fx = []
     self.x_star.append(x0)
-    self.initval = self.func(x0)
+    #self.initval = self.func(x0)
+    
     #print(self.initval)
     epsilon = []
     epsilon.append([x0])
     G = 0
-    for i in range(self.ak(0)):
+    self.initval = 0
+    for i in range(5):
       G += self.func(x0)
-    G_bar_best = G/self.ak(0)
+      self.initval += self.func(x0)
+    G_bar_best = G/5
+    self.initval = self.initval/5
+    
 
+    max_k = max_k - 5
     l_k = []
     u_k = []
     for i in range(len(loc_domain)):
@@ -141,8 +152,12 @@ class AHA():
     # phi = domain
 
     all_sol = [x0]
+    self.fx_star.append(self.initval)
+    all_fx = [self.initval]
+    all_x = [x0]
     uniq_sol_k =[]
-    for k in range(1,max_k+1):
+    while max_k > 0:
+      k = 1
       all_sol_k = []
       
       xk =[]
@@ -165,32 +180,51 @@ class AHA():
       # print(epsilonk)
       x_star_k = self.x_star[k-1]
       for i in epsilonk:
-        numsimobs = self.ak(k)
+        numsimreps = min(5, max_k)
         g_val = 0
-        for j in range(numsimobs):
+        for j in range(numsimreps):
           g_val += self.func(i)
-        g_val_bar = g_val/numsimobs
+        g_val_bar = g_val/numsimreps
         if(G_bar_best>g_val_bar):
           G_bar_best = g_val_bar
           x_star_k = list(i)
-
-      self.x_star.append(x_star_k)
-      self.decrease = 100*(self.initval - self.func(x_star_k) )/ abs(self.initval)
-      epsilon.append(epsilonk)
-      if ((self.percent is not None) and (self.decrease >= self.percent*0.01*abs(self.initval))):
+        
+        all_fx.append(G_bar_best)
+        all_x.append(x_star_k)
+        self.decrease = 100*((self.initval - all_fx[-1] ))/ abs(self.initval)
+      if ((self.percent is not None) and (self.decrease >= self.percent)):
         print("Stopping criterion met (% reduction in function value). Stopping optimization.")
+        self.x_star.append(x_star_k)
+        self.fx_star.append(G_bar_best)
         break
+
+      #self.decrease = 100*((self.initval - self.fx_star[-1] ))/ abs(self.initval)
+      #epsilon.append(epsilonk)
+      k += 1
+      max_k = max_k - numsimreps
+      # if ((self.percent is not None) and (self.decrease >= self.percent)):
+      #   print("Stopping criterion met (% reduction in function value). Stopping optimization.")
+      #   break
+
+    self.fxvals = all_fx
 
     end = time.time()
     print("time elapsed {} milli seconds".format((end-start)*1000))
     tracing_mem()
+    self.all_x = all_x
+    self.all_fx = all_fx
     return self.x_star
   
   def plot_iterations(self):
 
-    print("iters:",len(self.x_star))
+    self.df = pd.DataFrame({'x': self.all_x, 'f(x)': self.all_fx})
+    print (self.df)
+    print("iters:",len(self.all_x))
+    print("initial x: ", self.x0, "initial fx estimated: ", self.initval)
+    print("optimal x* values: ", self.x_star)
+    print("optimal f(x*) values: ",self.fx_star)
     print("% decrease:", self.decrease )
-    func_values = [self.func(x) for x in self.x_star]  # Evaluate the function for each solution
+    #func_values = [self.fxvals(x) for x in self.x_star]  # Evaluate the function for each solution
     # plt.figure(figsize=(10, 6))
     # plt.plot(range(len(self.x_star)), func_values, marker='o', linestyle='-')
     # plt.xlabel('Iteration')
@@ -325,11 +359,10 @@ def facility_loc(x):
 init = [2,2]
 dom = [[1,7]]*2
 func1AHA = AHA(func1,dom, percent=60)
-a = func1AHA.AHAalgolocal(50,dom,init, 100)
+a = func1AHA.AHAalgolocal(50,dom,init, max_k=500)
 
 func1AHA.plot_iterations()
 
 
 # print(b,c)
 print(a[-1])
-print(func1(a[-1]))

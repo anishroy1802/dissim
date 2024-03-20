@@ -1,133 +1,161 @@
 import numpy as np
+from scipy.spatial.distance import euclidean
+import tracemalloc
+import matplotlib.pyplot as plt
+import math
+import itertools
+import random
+import pandas as pd
+"""Memory Tracing:
+ The 'tracing_start' function is defined to manage memory tracing. It begins by stopping any ongoing memory tracing using 'tracemalloc.stop()' and checking if tracing is currently active with 'tracemalloc.is_tracing()'. Afterward, it starts memory tracing with 'tracemalloc.start()' and checks the tracing status again. This function is invaluable for profiling memory usage, enabling developers to gain insights into memory allocation and deallocation patterns during code execution. It can help identify potential memory-related issues and optimize memory usage in the application."""
 
-def static_truss_4bar_varun(para, n):
-    # objective to minimize expectation of hfun
-    # design variable = para,  para_lower=0;   para_upper=175;
-    # n= number of realizations of the function to estimate expectation
-    # output function evaluations size (n,1)
-    theta = np.random.randn(n, 3)  # three is the number of random variables
-    
-    len_val = 1000  # member length
-    Area1 = para
-    Area2 = 250 - np.sqrt(2) * Area1
-    Coord = np.array([[0, 0, 0],
-                      [1, 0, 0],
-                      [2, 0, 0],
-                      [1, -1, 0],
-                      [2, -1, 0]]) * len_val
-    Con = np.array([[1, 4],
-                    [2, 4],
-                    [3, 4],
-                    [5, 4]])  # Corrected indices
-    Reaction = np.array([[1, 1, 1],
-                         [1, 1, 1],
-                         [1, 1, 1],
-                         [0, 0, 1],
-                         [1,1,1]])
-    Area = np.array([Area1, Area2, Area1, Area2])
-    Rho = np.ones(Con.shape[0]) * 7860
+def tracing_start():
+    tracemalloc.stop()
+    print("Tracing Status: ", tracemalloc.is_tracing())
+    tracemalloc.start()
+    print("Tracing Status: ", tracemalloc.is_tracing())
 
-    hfun = np.zeros((n, 1))
+class KN():
 
-    for kk in range(n):
-        Load = np.array([[0, 0, 0],
-                         [0, 0, 0],
-                         [0, 0, 0],
-                         [100 + 20 * theta[kk, 0], 0, 0],
-                         [0, 0, 0]])
-        Elasticity1 = 200 + 30 * theta[kk, 1]
-        Elasticity2 = 80 + 10 * theta[kk, 2]
-        Elasticity = np.array([Elasticity1, Elasticity2, Elasticity1, Elasticity2])
-        D = {'Coord': Coord.T, 'Con': Con.T, 'Re': Reaction.T, 'Load': Load.T, 'E': Elasticity, 'A': Area, 'R': Rho}
-        for key, value in D.items():
-            print(f'Shape of {key}: {value.shape}')
-        w = D['Re'].shape
-        # Global Stiffness Matrix S
-        S = np.zeros((3 * w[1], 3 * w[1]))
-        # Global Mass Matrix M
-        M = np.zeros((3 * w[1], 3 * w[1]))
-        # Unrestrained Nodes U
-        U = np.ones(w) - D['Re']
-        # Location of unrestrained nodes f
-        f = np.where(U)[0]
+    def __init__(self, domain, step_size, custom_H_function, alpha, delta, n_0= 2, k = 300 ):
+        self.domain = domain
+        self.step_size = step_size
+        self.custom_H_function = custom_H_function
+        self.alpha = alpha
+        self.delta = delta
+        self.k = k
+        self.n_0 = n_0
+        self.dimensions = len(self.domain)
+        sol_space = []
+        for i in range(self.dimensions):
+            sol_space.append(np.arange(self.domain[i][0], self.domain[i][1]+ step_size[i], step_size[i]))
+        
+        self.solution_space = list(itertools.product(*sol_space))
+        self.confidence_lvl = 1 - self.alpha
+        #self.n_systems = len(self.solution_space)
+        self.eta = 0.5 * (((2*self.alpha)/(len(self.solution_space)-1))**(-2 / (self.n_0 - 1)) - 1)
+        #self.r = self.n_0
+        
+        #print(self.solution_space)
 
-        Tj = np.zeros((3 * D['Con'].shape[1], D['Con'].shape[1]))  # Initialize Tj
+    def initialize(self):
+        a = len(self.solution_space)
+        self.h = math.sqrt(2*self.eta*(self.n_0 - 1))
+        self.sol_space_dict = {}
+        for i in range(len(self.solution_space)):
+            self.sol_space_dict[i] = self.solution_space[i]
+        
+        self.X_i_bar = [0]*len(self.solution_space)
+        self.X_i_bar_n_0 = [0]*len(self.solution_space)
+        self.S_sq = np.zeros((a, a))
+        S_sq = np.zeros((a, a))
+        a = len(self.solution_space)
+        self.sim_vals = np.zeros((a, self.n_0)).tolist()
+        #now we have a dict mapping index to an (x,y) pair
+        for i in range(len(self.solution_space)):
+            for simrep in range(0, self.n_0):
+                self.sim_vals[i][simrep] = self.custom_H_function(self.sol_space_dict[i])
+                self.X_i_bar_n_0[i] += self.sim_vals[i][simrep]
+            
+            self.X_i_bar[i] = sum(self.sim_vals[i])
+            self.X_i_bar[i] = self.X_i_bar[i]/len(self.sim_vals[i])
+            self.X_i_bar_n_0[i] = self.X_i_bar_n_0[i]/self.n_0
+        
+        #self.X_i_bar_n_0 = self.X_i_bar[:self.n_0]
+        for i in range(a):
+            for j in range(a):
+                S_sq[i][j] = (1/(self.n_0 - 1)) * (sum(self.sim_vals[i][0:self.n_0]) 
+                                                      - sum(self.sim_vals[j][0:self.n_0])
+                                                      - (self.X_i_bar_n_0[i] - self.X_i_bar_n_0[j]))**2
+        
+        #print(S_sq)
+        return S_sq
+        
+    def screening(self):
+        if self.k < 200:
+            print("Too small budget")
+            return 
 
-        for i in range(D['Con'].shape[1]):
-            H = D['Con'][:, i]
-            C = D['Coord'][:, H[1]] - D['Coord'][:, H[0]]
-            print("Works 1")
-            # Length of Element Le
-            Le = np.linalg.norm(C)
-            T = C / Le
-            s = np.outer(T, T)
-            e = np.concatenate(([3 * H[0] - 2, 3 * H[0], 3 * H[0] + 1], [3 * H[1] - 2, 3 * H[1], 3 * H[1] + 1]))
-            print("Works 2")
-            # Stiffness for element i G=EA/Le
-            G = D['E'] * D['A'] / Le
-            print(G.shape)
-            print("Works 3")
-            print(S[np.ix_(e, e)].shape, G.shape, np.array([[s, -s], [-s, s]]).shape)
-            S[np.ix_(e, e)] += np.dot(G ,np.array([[s, -s], [-s, s]]))
-            print("Works 4")
-            # Mass of element i
-            K = (D['A'][i] * D['R'][i] * Le / 2)
-            M[np.ix_(e, e)] += K * np.block([[np.eye(3), np.zeros((3, 3))], [np.zeros((3, 3)), np.eye(3)]])
-            Tj[e, i] = G * T  # Store Tj for each element
-        U[f] = np.linalg.solve(S[np.ix_(f, f)], D['Load'][f])  # node displacements
-        F = np.sum(np.multiply(Tj, (U[:, D['Con'][1, :]] - U[:, D['Con'][0, :]])))  # member forces
-        R = (S @ U.flatten()).reshape(w)  # reactions
-        Stiff = S[np.ix_(f, f)]  # stiffness matrix
-        Mass = M[np.ix_(f, f)]  # mass matrix
-        hfun[kk] = U[0, 3]
-
-    return hfun
+        self.S_sq = self.initialize()
+        r = self.n_0
+        a = len(self.solution_space)
+        # self.check = np.zeros((a,a))
+        I_old = set()
+        for i in range(0, a):
+            I_old.add(i)
 
 
-np.random.seed(42)
-alpha = 0.05
-delta = 0.2
-n0 = 500
-k = 174
-eta = 0.5 * ((2 * alpha / (k - 1)) ** (-2 / (n0 - 1)) - 1)
-hsq = 2 * eta * (n0 - 1)
-h = np.sqrt(hsq)
-reps = np.zeros((n0, k))
-for i in range(k):
-    np.random.seed(100 + i)
-    reps[:, i] = static_truss_4bar_varun(i, n0)
+        #print(I_old)
+        #k = 0
+        while len(I_old)!=1 and self.k > 0:
+            print("Budget left: ", self.k)
+            #print(self.X_i_bar)
+            #print("iteration: ", k)
+            print("value of r: ", r)
+            print("set at beginning of iteration: ",I_old)
+            #print(I_old)
+            I = set()
 
-sys_mean = np.zeros((k, 1))
-sys_std = np.zeros((k, k))
-w = np.zeros((k, k))
-for i in range(k):
-    sys_mean[i, 0] = np.mean(reps[:, i])
+            self.check = np.zeros((a,a))
+            self.W = np.zeros((len(self.solution_space), len(self.solution_space))) 
+            for i in range(len(self.solution_space)):
+                for j in range(len(self.solution_space)):
+                    b = (self.delta/(2*r))*(((self.h**2 * self.S_sq[i][j])/(self.delta**2)) - r)
+                    self.W[i][j] = max(0, b)
 
-for i in range(k):
-    for j in range(k):
-        if i == j:
-            sys_std[i, j] = 0
-            w[i, j] = 0
-        else:
-            s = 0
-            for b in range(n0):
-                s += (reps[b, i] - reps[b, j] - (sys_mean[i] - sys_mean[j])) ** 2
-            sys_std[i, j] = (1 / (n0 - 1)) * s
-            w[i, j] = max(0, (delta / (2 * n0)) * ((hsq * sys_std[i, j] / (delta ** 2)) - n0))
+            #now we have defined our W matrix
+            for i in range(0,a):
+                for j in range(0,a):
+                    if ((i!=j) and (i in I_old) and (j in I_old)):
+                        #print("a-b; a: ", self.X_i_bar[i], " b: ", self.X_i_bar[j] - self.W[i][j])
+                        if self.X_i_bar[i] >= self.X_i_bar[j] - self.W[i][j]:
+                            self.check[i][j] = 1
 
-I = np.zeros((k, 1))
-for i in range(k):
-    a = 0
-    for j in range(k):
-        if i == j:
-            a = a
-        else:
-            if sys_mean[i] - sys_mean[j] - w[i, j] > 0:
-                a += 1
-    if a == 0:
-        I[i, 0] = i
-    else:
-        I[i, 0] = 0
+                row_sum = sum(self.check[i])
+                if row_sum == len(I_old) - 1:
+                    #print(i, " added")
+                    I.add(i)
+                # else:
+                #     print(i, "not  added")
+            
+            #print(self.check)
+            #print(I)
+            # if k> 10:
+            #     break
+            if len(I) == 1:
+                print("Got single optimal solution: ")
+                return I
+            else:
+                I_old = I.copy()
+                r += 1
+                #k+= 1
+                for i in range(a):
+                    if i in I_old:
+                        self.sim_vals[i].append(self.custom_H_function(self.sol_space_dict[i]))
+                        self.k -= 1
+                        self.X_i_bar[i]  = (self.X_i_bar[i]*(r-1) + self.sim_vals[i][-1])/r
+                
 
-print(I)
 
+        print("Final set after exhausting budget: ")   
+        return I
+            
+
+
+def objective_function(x):
+    noise = np.random.normal(scale=0.1)  # Add Gaussian noise with a standard deviation of 0.1
+    return -1*(2*x[0] + x[0]**2 + x[1]**2 + noise) # Minimisation problem hence -1 
+
+#main()
+dom = [[0,2], [0,2]]
+step_size = [0.5, 0.5]
+
+optimizer  = KN(domain = dom, step_size= step_size,
+                         custom_H_function= objective_function,alpha=0.5, delta= 5, n_0  = 2, k = 300)
+a1 = optimizer.screening()
+#print("Solutions:")
+if a1 is not None:
+    for ele in a1:
+        print("Element: ", optimizer.sol_space_dict[ele], "; Objective fn Value: ", -1* optimizer.X_i_bar[ele])
+else:
+    print("No solution")

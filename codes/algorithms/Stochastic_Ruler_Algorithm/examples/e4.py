@@ -10,4 +10,4 @@ dom4 = dom = {"x1": [i for i in range(101)], "x2": [i for i in range(101)]}
 
 sr_userDef4 = ds.stochastic_ruler(space = dom4, maxevals = 25, prob_type = 'opt_sol', func = objective_function, neigh_structure = 1 )
 print(sr_userDef4.optsol())
-sr_userDef4.plot_minh_of_z()
+# sr_userDef4.plot_minh_of_z()

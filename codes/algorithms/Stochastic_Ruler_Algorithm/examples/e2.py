@@ -31,4 +31,4 @@ dom2 = {"x": [i for i in range(1, 11)]}
 
 sr_userdef2 = ds.stochastic_ruler(space=dom2, maxevals=300, prob_type="opt_sol", func=ex3, percentReduction=80, neigh_structure = 2 )
 print(sr_userdef2.optsol())
-sr_userdef2.plot_minh_of_z()
+# sr_userdef2.plot_minh_of_z()

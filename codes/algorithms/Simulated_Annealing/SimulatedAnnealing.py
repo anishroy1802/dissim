@@ -253,13 +253,13 @@ class SA():
                         break
 
         # Plot the function value vs. iteration
-        plt.figure(figsize=(10, 6))
-        plt.plot(range(len(self.function_values)), self.function_values, marker='o', linestyle='-')
-        plt.xlabel('Iteration')
-        plt.ylabel('Function Value')
-        plt.title('Function Value vs. Iteration; Neighborhood Structure: ' + str(self.nbd_structure))
-        plt.grid(True)
-        plt.show()
+        # plt.figure(figsize=(10, 6))
+        # plt.plot(range(len(self.function_values)), self.function_values, marker='o', linestyle='-')
+        # plt.xlabel('Iteration')
+        # plt.ylabel('Function Value')
+        # plt.title('Function Value vs. Iteration; Neighborhood Structure: ' + str(self.nbd_structure))
+        # plt.grid(True)
+        # plt.show()
 
     def print_function_values(self):
         #print("V matrix:", self.V)

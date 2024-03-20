@@ -19,7 +19,7 @@ def func1(x0):
 
 init = [0,0]
 dom = [[0,100],[0,100]]
-func1AHA = dissim.AHA(func1,dom, percent=60)
+func1AHA = dissim.AHA(func1,dom)
 a = func1AHA.AHAalgolocal(50,dom,init, 100)
 
 func1AHA.plot_iterations()

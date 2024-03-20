@@ -18,7 +18,7 @@ step_size = [0.1, 0.2]
 T= 100
 k= 100
 
-optimizer  = dissim.SA(domain = dom, step_size= step_size, T = 100, k = 25,
-                         custom_H_function= objective_function, nbd_structure= 'N1', percent_reduction= 80)
+optimizer  = dissim.SA(domain = dom, step_size= step_size, T = 100, k = 300,
+                         custom_H_function= objective_function, nbd_structure= 'N2', percent_reduction= 80)
 optimizer.optimize()
-#optimizer.print_function_values()
+optimizer.print_function_values()

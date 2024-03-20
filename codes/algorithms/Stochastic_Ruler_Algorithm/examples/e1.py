@@ -15,6 +15,6 @@ def func(x0):
 
 dom = {"x1": [i for i in range(101)], "x2": [i for i in range(101)]}
 
-sr_userDef = ds.stochastic_ruler(space=dom, maxevals=1000, prob_type="opt_sol", percentReduction=80, func=func, neigh_structure=2)
+sr_userDef = ds.stochastic_ruler(space=dom, maxevals=20, prob_type="opt_sol", func=func, neigh_structure=1)
 print(sr_userDef.optsol())
-sr_userDef.plot_minh_of_z()
+# sr_userDef.plot_minh_of_z()
