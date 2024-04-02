@@ -175,7 +175,7 @@ class AHA():
     all_x = [self.init_solution]
     uniq_sol_k =[]
     while self.max_evals > 0:
-      k = 1
+      k = 0
       all_sol_k = []
       
       xk =[]
@@ -197,40 +197,64 @@ class AHA():
       epsilonk = uniq_sol_k + [tuple(self.x_star[k-1])]
       # print(epsilonk)
       x_star_k = self.x_star[k-1]
+      #print(epsilonk)
+
+
       for i in epsilonk:
+        #print(list(i))
+        all_x.append(list(i))
+        k+= 1
         numsimreps = min(5, self.max_evals)
+        self.max_evals = self.max_evals - numsimreps
         g_val = 0
         for j in range(numsimreps):
           g_val += self.func(i)
+
         g_val_bar = g_val/numsimreps
+        all_fx.append(g_val_bar)
+
         if(G_bar_best>g_val_bar):
           G_bar_best = g_val_bar
           x_star_k = list(i)
+          self.x_star.append(x_star_k)
+          self.fx_star.append(G_bar_best)
         
-        all_fx.append(G_bar_best)
-        all_x.append(x_star_k)
+        # all_fx.append(G_bar_best)
+        # all_x.append(x_star_k)
+        # print("all_fx")
+        # print(all_x, all_fx)
         self.decrease = 100*((self.initval - all_fx[-1] ))/ abs(self.initval)
-      if ((self.percent_improvement is not None) and (self.decrease >= self.percent_improvement)):
-        print("Stopping criterion met (% reduction in function value). Stopping optimization.")
-        self.x_star.append(x_star_k)
-        self.fx_star.append(G_bar_best)
-        break
+        if ((self.percent_improvement is not None) and (self.decrease >= self.percent_improvement)):
+          print("Stopping criterion met (% reduction in function value). Stopping optimization.")
+          # self.x_star.append(x_star_k)
+          # self.fx_star.append(G_bar_best)
+          self.all_x = all_x
+          self.all_fx = all_fx
+          return self.x_star
+
+        if self.max_evals == 0:
+          print("Budget exhausted. Stopping optimization.")
+          self.all_x = all_x
+          self.all_fx = all_fx
+          # self.x_star.append(x_star_k)
+          # self.fx_star.append(G_bar_best)
+          return self.x_star
+          
 
       #self.decrease = 100*((self.initval - self.fx_star[-1] ))/ abs(self.initval)
       #epsilon.append(epsilonk)
-      k += 1
-      self.max_evals = self.max_evals - numsimreps
+      #k += 1
+      #self.max_evals = self.max_evals - numsimreps
       # if ((self.percent_improvement is not None) and (self.decrease >= self.percent_improvement)):
       #   print("Stopping criterion met (% reduction in function value). Stopping optimization.")
       #   break
 
-    self.fxvals = all_fx
+    #self.fxvals = all_fx
 
     end = time.time()
     print("time elapsed {} milli seconds".format((end-start)*1000))
     tracing_mem()
-    self.all_x = all_x
-    self.all_fx = all_fx
+    
     return self.x_star
   
   def print_function_values(self):
@@ -334,54 +358,53 @@ class AHA():
 
   #   return all_sols,best_sol,best_val
   
-# def objective_function(x):
-#     noise = np.random.normal(scale=0.1)  # Add Gaussian noise with a standard deviation of 0.1
-#     return 2*x[0] + x[0]**2 + x[1]**2 + noise
+def objective_function(x):
+    noise = np.random.normal(scale=0.1)  # Add Gaussian noise with a standard deviation of 0.1
+    return 2*x[0] + x[0]**2 + x[1]**2 + noise
 
-# def multinodal(x):
-#   return (np.sin(0.05*np.pi*x)**6)/2**(2*((x-10)/80)**2)
+def multinodal(x):
+  return (np.sin(0.05*np.pi*x)**6)/2**(2*((x-10)/80)**2)
 
-# def func1(x0):
-#   x1,x2 = x0[0],x0[1]
-#   return -(multinodal(x1)+multinodal(x2))+np.random.normal(0,0.3)
+def func1(x0):
+  x1,x2 = x0[0],x0[1]
+  return -(multinodal(x1)+multinodal(x2))+np.random.normal(0,0.3)
 
-# def func2(x):
-#   x1,x2,x3,x4 = x[0],x[1], x[2],x[3]
-#   return (x1+10*x2)**2 + 5* (x3-x4)**2 + (x2-2*x3)**4 + 10*(x1-x4)**4 
-#   + 1 +np.random.normal(0,30)
+def func2(x):
+  x1,x2,x3,x4 = x[0],x[1], x[2],x[3]
+  return (x1+10*x2)**2 + 5* (x3-x4)**2 + (x2-2*x3)**4 + 10*(x1-x4)**4 
+  + 1 +np.random.normal(0,30)
 
-# def facility_loc(x):
-#   #normal demand
-#   X1,Y1 = x[0],x[1] 
-#   X2,Y2 = x[2],x[3] 
-#   X3,Y3 = x[4],x[5] 
-#   avg_dist_daywise = []
-#   T0 = 30
-#   n = 6
-#   for t in range(T0):
-#       total_day = 0                  ##### total distance travelled by people
-#       ###### now finding nearest facility and saving total distance 
-#       #travelled in each entry of data
-#       for i in range(n):
-#           for j in range(n):
-#               demand=-1
-#               while(demand<0):    
-#                   demand = np.random.normal(180, 30, size=1)[0]
-#               total_day += demand*min(abs(X1-i)+abs(Y1-j) ,
-#                                       abs(X2-i)+abs(Y2-j),abs(X3-i)+abs(Y3-j) ) 
-#               ### total distance from i,j th location to nearest facility
-#       avg_dist_daywise.append(total_day/(n*n))    
-#   return sum(avg_dist_daywise)/T0
-
-
-# init = [2,2]
-# dom = [[1,7]]*2
-# step_size = [0.01,0.25]
-# func1AHA = AHA(func1,dom, step_size= step_size,max_evals= 500, percent_improvement=60, init_solution=[2,2],m = 40)
-# a = func1AHA.optimize()
-
-# func1AHA.print_function_values()
+def facility_loc(x):
+  #normal demand
+  X1,Y1 = x[0],x[1] 
+  X2,Y2 = x[2],x[3] 
+  X3,Y3 = x[4],x[5] 
+  avg_dist_daywise = []
+  T0 = 30
+  n = 6
+  for t in range(T0):
+      total_day = 0                  ##### total distance travelled by people
+      ###### now finding nearest facility and saving total distance 
+      #travelled in each entry of data
+      for i in range(n):
+          for j in range(n):
+              demand=-1
+              while(demand<0):    
+                  demand = np.random.normal(180, 30, size=1)[0]
+              total_day += demand*min(abs(X1-i)+abs(Y1-j) ,
+                                      abs(X2-i)+abs(Y2-j),abs(X3-i)+abs(Y3-j) ) 
+              ### total distance from i,j th location to nearest facility
+      avg_dist_daywise.append(total_day/(n*n))    
+  return sum(avg_dist_daywise)/T0
 
 
-# # print(b,c)
-# print(a[-1])
+init = [2,2,2,2]
+dom = [[1,7]]*4
+step_size = [0.1,0.25,0.5,0.5]
+func1AHA = AHA(func2,dom, step_size= step_size,max_evals= 500, percent_improvement=60, init_solution=init,m = 40)
+a = func1AHA.optimize()
+
+func1AHA.print_function_values()
+
+
+print(a[-1])

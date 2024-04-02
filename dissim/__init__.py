@@ -134,11 +134,11 @@ class KN():
         #print(I_old)
         #max_evals= 0
         while len(I_old)!=1 and self.max_evals> 0:
-            print("Budget left: ", self.max_evals)
-            #print(self.X_i_bar)
-            #print("iteration: ", k)
-            print("value of r: ", r)
-            print("set at beginning of iteration: ",I_old)
+            # print("Budget left: ", self.max_evals)
+            # #print(self.X_i_bar)
+            # #print("iteration: ", k)
+            # print("value of r: ", r)
+            # print("set at beginning of iteration: ",I_old)
             #print(I_old)
             I = set()
 
@@ -185,7 +185,6 @@ class KN():
 
         print("Final set after exhausting budget: ")   
         return I
-    
 
 """
 Simulated Anealing Algorithm
@@ -469,14 +468,16 @@ class SA():
         # Create a DataFrame using pandas
         self.df = pd.DataFrame({'x': x_values, 'f(x)': fx_values})
         if end_index is not None:
+            print("Stopping criterion met (% reduction in function value). Stopping optimization.")
             self.change = decrease_percentages[end_index]
         else:
+            print("Budget exhausted. Stopping optimization.")
             self.change = decrease_percentages[-1]
         self.x_values = x_values
         self.fx_values = fx_values
         # Display the DataFrame
         print(self.df)
-        print("Function completed without termination.")
+        #print("Function completed without termination.")
 
 
         # Plot the function value vs. iteration
@@ -661,7 +662,7 @@ class AHA():
     all_x = [self.init_solution]
     uniq_sol_k =[]
     while self.max_evals > 0:
-      k = 1
+      k = 0
       all_sol_k = []
       
       xk =[]
@@ -683,40 +684,64 @@ class AHA():
       epsilonk = uniq_sol_k + [tuple(self.x_star[k-1])]
       # print(epsilonk)
       x_star_k = self.x_star[k-1]
+      #print(epsilonk)
+
+
       for i in epsilonk:
+        #print(list(i))
+        all_x.append(list(i))
+        k+= 1
         numsimreps = min(5, self.max_evals)
+        self.max_evals = self.max_evals - numsimreps
         g_val = 0
         for j in range(numsimreps):
           g_val += self.func(i)
+
         g_val_bar = g_val/numsimreps
+        all_fx.append(g_val_bar)
+
         if(G_bar_best>g_val_bar):
           G_bar_best = g_val_bar
           x_star_k = list(i)
+          self.x_star.append(x_star_k)
+          self.fx_star.append(G_bar_best)
         
-        all_fx.append(G_bar_best)
-        all_x.append(x_star_k)
+        # all_fx.append(G_bar_best)
+        # all_x.append(x_star_k)
+        # print("all_fx")
+        # print(all_x, all_fx)
         self.decrease = 100*((self.initval - all_fx[-1] ))/ abs(self.initval)
-      if ((self.percent_improvement is not None) and (self.decrease >= self.percent_improvement)):
-        print("Stopping criterion met (% reduction in function value). Stopping optimization.")
-        self.x_star.append(x_star_k)
-        self.fx_star.append(G_bar_best)
-        break
+        if ((self.percent_improvement is not None) and (self.decrease >= self.percent_improvement)):
+          print("Stopping criterion met (% reduction in function value). Stopping optimization.")
+          # self.x_star.append(x_star_k)
+          # self.fx_star.append(G_bar_best)
+          self.all_x = all_x
+          self.all_fx = all_fx
+          return self.x_star
+
+        if self.max_evals == 0:
+          print("Budget exhausted. Stopping optimization.")
+          self.all_x = all_x
+          self.all_fx = all_fx
+          # self.x_star.append(x_star_k)
+          # self.fx_star.append(G_bar_best)
+          return self.x_star
+          
 
       #self.decrease = 100*((self.initval - self.fx_star[-1] ))/ abs(self.initval)
       #epsilon.append(epsilonk)
-      k += 1
-      self.max_evals = self.max_evals - numsimreps
+      #k += 1
+      #self.max_evals = self.max_evals - numsimreps
       # if ((self.percent_improvement is not None) and (self.decrease >= self.percent_improvement)):
       #   print("Stopping criterion met (% reduction in function value). Stopping optimization.")
       #   break
 
-    self.fxvals = all_fx
+    #self.fxvals = all_fx
 
     end = time.time()
     print("time elapsed {} milli seconds".format((end-start)*1000))
     tracing_mem()
-    self.all_x = all_x
-    self.all_fx = all_fx
+    
     return self.x_star
   
   def print_function_values(self):
@@ -824,7 +849,7 @@ class AHA():
   Stochastic Ruler Method
   """
 
-  class stochastic_ruler:
+class stochastic_ruler:
     """
     The class definition for the implementation of the Stochastic Ruler Random Search Method;
     Alrefaei, Mahmoud H., and Sigrun Andradottir.

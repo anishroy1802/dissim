@@ -8,23 +8,15 @@ def func1(x0):
   x1,x2 = x0[0],x0[1]
   return -(multinodal(x1)+multinodal(x2))+np.random.normal(0,0.3)
 
+init = [2,2]
+dom = [[1,7]]*2
+step_size = [0.1,0.25]
+func1AHA = dissim.AHA(func1,dom, step_size= step_size,max_evals= 500, percent_improvement=60, init_solution=[2,2],m = 40)
+a = func1AHA.optimize()
 
-# init = [0,0]
-# dom = [[0,100],[0,100]]
-# func1AHA = dissim.AHA(func1,dom)
-# a = func1AHA.AHAalgolocal(100,50,dom,init)
-# # print(b,c)
-# print(a[-1])
-# print(func1(a[-1]))
+func1AHA.print_function_values()
 
-init = [0,0]
-dom = [[0,100],[0,100]]
-func1AHA = dissim.AHA(func1,dom)
-a = func1AHA.AHAalgolocal(50,dom,init, 100)
-
-func1AHA.plot_iterations()
-
-
-# print(b,c)
-print(a[-1])
-print(func1(a[-1]))
+if a is not None:
+  print(a[-1])
+else:
+  print("No solution")

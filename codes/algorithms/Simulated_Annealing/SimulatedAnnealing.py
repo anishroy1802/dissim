@@ -304,14 +304,16 @@ class SA():
         # Create a DataFrame using pandas
         self.df = pd.DataFrame({'x': x_values, 'f(x)': fx_values})
         if end_index is not None:
+            print("Stopping criterion met (% reduction in function value). Stopping optimization.")
             self.change = decrease_percentages[end_index]
         else:
+            print("Budget exhausted. Stopping optimization.")
             self.change = decrease_percentages[-1]
         self.x_values = x_values
         self.fx_values = fx_values
         # Display the DataFrame
         print(self.df)
-        print("Function completed without termination.")
+        #print("Function completed without termination.")
 
 
         # Plot the function value vs. iteration

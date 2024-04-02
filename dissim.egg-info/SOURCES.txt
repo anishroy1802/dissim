@@ -4,9 +4,6 @@ setup.py
 codes/algorithms/Adaptive_Hyperbox_Algorithm/AdaptiveHyperbox.py
 codes/algorithms/Adaptive_Hyperbox_Algorithm/examples/e1.py
 codes/algorithms/Adaptive_Hyperbox_Algorithm/examples/e2.py
-codes/algorithms/Adaptive_Hyperbox_Algorithm/examples/e3.py
-codes/algorithms/Adaptive_Hyperbox_Algorithm/examples/e4.py
-codes/algorithms/Adaptive_Hyperbox_Algorithm/examples/e5.py
 codes/algorithms/Stochastic_Ruler_Algorithm/StochasticRuler.py
 codes/algorithms/Stochastic_Ruler_Algorithm/examples/e1.py
 codes/algorithms/Stochastic_Ruler_Algorithm/examples/e2.py

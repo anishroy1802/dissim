@@ -89,11 +89,11 @@ class KN():
         #print(I_old)
         #max_evals= 0
         while len(I_old)!=1 and self.max_evals> 0:
-            print("Budget left: ", self.max_evals)
-            #print(self.X_i_bar)
-            #print("iteration: ", k)
-            print("value of r: ", r)
-            print("set at beginning of iteration: ",I_old)
+            # print("Budget left: ", self.max_evals)
+            # #print(self.X_i_bar)
+            # #print("iteration: ", k)
+            # print("value of r: ", r)
+            # print("set at beginning of iteration: ",I_old)
             #print(I_old)
             I = set()
 
