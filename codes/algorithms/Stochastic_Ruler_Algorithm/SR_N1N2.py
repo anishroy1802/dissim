@@ -156,7 +156,7 @@ class stochastic_ruler:
                     temp = self.run(neigh, neigh, X, y)
                     minm = min(minm, temp)
                     maxm = max(maxm, temp)
-                    print(minm, maxm)
+                    #print(minm, maxm)
 
         return (minm, maxm)
 
@@ -225,10 +225,16 @@ class stochastic_ruler:
             a, b = self.det_a_b(self.space, self.maxevals // 10, X, y)
             # a = -2
             # b = 1
+            print("a,b:")
             print(a,b)
             minh_of_z = b
             # step 0 ends here
+            print("total evals: ", self.maxevals + 1)
             while k < self.maxevals + 1:
+                print("k: " , k)
+                print("x_k: ", x_k)
+                k+=1
+
                 # print("minz"+str(minh_of_z))
                 # step 1:  Given xk = x, choose a candidate zk from N(x)
 
@@ -241,7 +247,9 @@ class stochastic_ruler:
 
                 # step 1 ends here
                 # step 2: Given zk = z, draw a sample h(z) from H(z)
+                print("z_K: ", zk)
                 iter = self.Mf(k)
+                print("iter: ", iter)
                 for i in range(iter):
                     h_of_z = self.run(zk, zk, X, y)
                     print("value at iter: ", h_of_z)
@@ -262,15 +270,15 @@ class stochastic_ruler:
                     u = np.random.uniform(a, b)  # Then draw a sample u from U(a, b)
 
                     if h_of_z > u:  # If h(z) > u, then let xk+1 = xk and go to step 3.
-                        k += 1
+                        #k += 1
                         if h_of_z < minh_of_z:
                             minh_of_z = h_of_z
                             opt_x = x_k
                         break
                     # Otherwise draw another sample h(z) from H(z) and draw another sample u from U(a, b), part of the loop where iter = self.Mf(k) tells the maximum number of failures allowed
-                    if h_of_z < u:  # If all Mk tests have failed
+                    if h_of_z <= u:  # If all Mk tests have failed
                         x_k = zk
-                        k += 1
+                        #k += 1
                         if h_of_z < minh_of_z:
                             minh_of_z = h_of_z
                             self.minh_of_z_tracker.append(h_of_z)
@@ -399,17 +407,27 @@ class stochastic_ruler:
     #     plt.show()
 
 
-def func(x0):
-    x1, x2 = x0["x1"], x0["x2"]
+# def func(x0):
+#     x1, x2 = x0["x1"], x0["x2"]
 
-    def multinodal(x):
-        return (np.sin(0.05 * np.pi * x) ** 6) / 2 ** (2 * ((x - 10) / 80) ** 2)
+#     def multinodal(x):
+#         return (np.sin(0.05 * np.pi * x) ** 6) / 2 ** (2 * ((x - 10) / 80) ** 2)
 
-    return -(multinodal(x1) + multinodal(x2)) + np.random.normal(0, 0.3)
+#     return -(multinodal(x1) + multinodal(x2)) + np.random.normal(0, 0.3)
 
 
-dom = {"x1": [i for i in range(101)], "x2": [i for i in range(101)]}
+# dom = {"x1": [i for i in range(101)], "x2": [i for i in range(101)]}
 
-sr_userDef = stochastic_ruler(space=dom, maxevals=10, prob_type="opt_sol", func=func, neigh_structure=1)
-print(sr_userDef.optsol())
-#sr_userDef.plot_minh_of_z()
+# sr_userDef = stochastic_ruler(space=dom, maxevals=10, prob_type="opt_sol", func=func, neigh_structure=1)
+# print(sr_userDef.optsol())
+# #sr_userDef.plot_minh_of_z()
+
+def func2(x):
+  x1,x2,x3,x4 = x['x1'],x['x2'], x['x3'],x['x4']
+  return (x1+10*x2)**2 + 5* (x3-x4)**2 + (x2-2*x3)**4 + 10*(x1-x4)**4 + 1 +np.random.normal(0,30)
+
+dom3 = {'x1':[i for i in range(20)],'x2':[i for i in range(20)],'x3':
+       [i for i in range(20)],'x4':[i for i in range(20)]}
+sr_userDef3 = stochastic_ruler(space = dom3, maxevals = 10, prob_type = 'opt_sol', func = func2, percentReduction = 50, neigh_structure=1)
+print(sr_userDef3.optsol())
+# sr_userDef3.plot_minh_of_z()

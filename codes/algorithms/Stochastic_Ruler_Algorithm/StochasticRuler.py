@@ -18,29 +18,30 @@ class stochastic_ruler:
     Proceedings Winter Simulation Conference. IEEE, 1996.
     """
 
-    def __init__( self, space: dict, maxevals: int = 300, prob_type="opt_sol", func=None, 
-        percentReduction: int = None, init_solution: dict = None, lower_bound: int = None, 
-        upper_bound: int = None, neigh_structure : int = 1):
+    def __init__( self, space: dict, max_evals: int = 300, prob_type="opt_sol", func=None, 
+        percent_improvement: int = None, init_solution: dict = None, lower_bound: int = None, 
+        upper_bound: int = None, neigh_structure : int = 1, print_solutions: bool = False):
         """The constructor for declaring the instance variables in the Stochastic Ruler Random Search Method
 
         Args:
             space (dict): allowed set of values for the set of hyperparameters in the form of a dictionary
                         hyperparamater name -> key
                         the list of allowed values for the respective hyperparameter -> value
-            maxevals (int, optional): maximum number of evaluations for the performance measure; Defaults to 100.
+            max_evals (int, optional): maximum number of evaluations for the performance measure; Defaults to 100.
         """
         self.space = space  # domain
         self.prob_type = ( prob_type ) # hyperparam opt (hyp_opt), optimal solution (opt_sol) 
         self.data = None
-        self.maxevals = maxevals
+        self.max_evals = max_evals
         self.initial_choice_HP = None
         self.Neigh_dict = self.help_neigh_struct()
         self.func = func
-        self.percentReduction = percentReduction
+        self.percent_improvement = percent_improvement
         self.init_solution = init_solution
         self.lower_bound = lower_bound
         self.upper_bound = upper_bound
         self.neigh_structure = neigh_structure
+        self.print_solutions = print_solutions
 
     def help_neigh_struct(self) -> dict:
         Dict = {}
@@ -101,6 +102,23 @@ class stochastic_ruler:
         return dict(zip(initial_solution.keys(), chosen_combination))
 
 
+    def no_of_solutions_visited(self, max_evals):
+
+        """The method for calculating the maximum solutions that can be visited from the imput budget
+        Args:
+            max_evals (int): the budget in terms of simulations
+
+        Returns:
+            int: the maximum number of solutions that can be visited as a part of the algorithm
+        """
+
+        sols = -1
+        budget_exhausted=0
+        while budget_exhausted <= max_evals:
+            budget_exhausted+=int(math.log(sols + 10, math.e) / math.log(5, math.e))
+            sols+=1
+
+        return sols
 
 
     def det_a_b(self, domain, max_eval, X=None, y=None):
@@ -124,16 +142,22 @@ class stochastic_ruler:
             maxm = self.upper_bound
 
         else:
-            max_iter = (max_eval) // len(domain)
-        maxm = -1 * math.inf
-        minm = math.inf
-        neigh = {}
-        for i in range(max_iter):
-            for dom in domain:
-                neigh[dom] = np.random.choice(domain[dom])
-            val = self.run(neigh, neigh, X, y)
-            minm = min(minm, val)
-            maxm = max(maxm, val)
+            max_iter = 20
+        
+            Reps_for_each_sol = 5
+            maxm = -math.inf
+            minm = math.inf
+
+            for i in range(max_iter):
+                # print("i = ", i)
+                for j in range(Reps_for_each_sol):
+                    # print("j = ", j)
+                    # Randomly sample from the domain for each variable
+                    neigh = {var: np.random.choice(values) for var, values in domain.items()}
+                    temp = self.run(neigh, neigh, X, y)
+                    minm = min(minm, temp)
+                    maxm = max(maxm, temp)
+                    #print(minm, maxm)
 
         return (minm, maxm)
 
@@ -177,7 +201,7 @@ class stochastic_ruler:
 
         self.minh_of_z_tracker = []
 
-        if self.percentReduction is not None:
+        if self.percent_improvement is not None:
 
             initial_choice_HP = {}
 
@@ -191,7 +215,7 @@ class stochastic_ruler:
             init_value = self.func(initial_choice_HP)
             print("Initial value = ", init_value)
 
-            self.target_value = init_value * (1 - self.percentReduction * 0.01) if init_value >= 0 else init_value * (1 + self.percentReduction * 0.01)
+            self.target_value = init_value * (1 - self.percent_improvement * 0.01) if init_value >= 0 else init_value * (1 + self.percent_improvement * 0.01)
             print("Target Value = ", self.target_value)
             print("------")
 
@@ -199,16 +223,15 @@ class stochastic_ruler:
             k = 1
             x_k = initial_choice_HP
             opt_x = x_k
-            a, b = self.det_a_b(self.space, self.maxevals // 10, X, y)
-            a = -2
-            b = 1
+            a, b = self.det_a_b(self.space, self.max_evals // 10, X, y)
+            # print("a,b:")
             # print(a,b)
             minh_of_z = b
             # step 0 ends here
-            while k < self.maxevals + 1:
-                # print("minz"+str(minh_of_z))
-                # step 1:  Given xk = x, choose a candidate zk from N(x)
+            # print("total evals: ", self.no_of_solutions_visited(self.max_evals))
+            while k < self.no_of_solutions_visited(self.max_evals) + 1:
 
+                # step 1:  Given xk = x, choose a candidate zk from N(x)
                 if self.neigh_structure == 1:
                     zk = self.next_solution_based_on_distance(x_k)                  #N1
                 
@@ -219,21 +242,22 @@ class stochastic_ruler:
                 # step 1 ends here
                 # step 2: Given zk = z, draw a sample h(z) from H(z)
                 iter = self.Mf(k)
+                
                 for i in range(iter):
                     h_of_z = self.run(zk, zk, X, y)
-                    print("value at iter: ", h_of_z)
+                    # print("value at iter: ", h_of_z)
+
+                    if self.print_solutions:
+                        print("k: " , k, "x_k: ", x_k, "f(x_k): ", h_of_z )
                     
 
                     if h_of_z <= self.target_value :
-                        print("-------")
-                        print("target val:", self.target_value)
-                        print("h of z at stop: ", h_of_z)
+                        # print("h of z at stop: ", h_of_z)
 
-                        print("Stopping criterion of ", self.percentReduction,"% reduction in function value. Stopping optimization.")
+                        print("Stopping criterion of ", self.percent_improvement,"% reduction in function value. Stopping optimization.")
                         # return h_of_z, opt_x, a, b, minh_of_z_tracker
                         self.minh_of_z_tracker.append(h_of_z)
                         print(self.minh_of_z_tracker)
-                        #print(target_value)
                         return h_of_z, opt_x, a, b
 
                     u = np.random.uniform(a, b)  # Then draw a sample u from U(a, b)
@@ -245,7 +269,7 @@ class stochastic_ruler:
                             opt_x = x_k
                         break
                     # Otherwise draw another sample h(z) from H(z) and draw another sample u from U(a, b), part of the loop where iter = self.Mf(k) tells the maximum number of failures allowed
-                    if h_of_z < u:  # If all Mk tests have failed
+                    if h_of_z <= u:  # If all Mk tests have failed
                         x_k = zk
                         k += 1
                         if h_of_z < minh_of_z:
@@ -260,7 +284,7 @@ class stochastic_ruler:
             return minh_of_z, opt_x, a, b 
 
         else:
-            print("No percentRedn criteria set:")
+            print("No percent Reduction criteria set:")
             initial_choice_HP = {}
 
             if self.init_solution is None:
@@ -271,20 +295,20 @@ class stochastic_ruler:
 
             # printing initial value for checking
             init_value = self.func(initial_choice_HP)
-            print(init_value)
+            print("initial_value: ", init_value)
 
             # step 0: Select a starting point x0 in S and let k = 0
             k = 1
             x_k = initial_choice_HP
             opt_x = x_k
-            a, b = self.det_a_b(self.space, self.maxevals // 10, X, y)
-            a = -2
-            b= 1
+            a, b = self.det_a_b(self.space, self.max_evals // 10, X, y)
+            # a = -2
+            # b= 1
             # print(a,b)
             minh_of_z = b
             # step 0 ends here
-            while k < self.maxevals + 1:
-                # print("minz"+str(minh_of_z))
+            while k < self.no_of_solutions_visited(self.max_evals) + 1:
+                
                 # step 1:  Given xk = x, choose a candidate zk from N(x)
 
                 if self.neigh_structure == 1:
@@ -298,7 +322,10 @@ class stochastic_ruler:
                 iter = self.Mf(k)
                 for i in range(iter):
                     h_of_z = self.run(zk, zk, X, y)
-                    print(h_of_z)
+                    # print(h_of_z)
+
+                    if self.print_solutions:
+                        print("k: " , k, "x_k: ", x_k, "f(x_k): ", h_of_z )
                     
 
                     u = np.random.uniform(a, b)  # Then draw a sample u from U(a, b)
@@ -359,34 +386,6 @@ class stochastic_ruler:
             return funcval
         # print("acc" + str(acc))
 
-    def plot_minh_of_z(self):
-        """Plot the variation of minh_of_z with each iteration."""
-        # _, _, _, _, minh_of_z_tracker = self.SR_Algo()  Call the modified SR_Algo method
-
-        plt.figure(figsize=(10, 6))
-
-        if self.percentReduction is not None:
-            plt.axhline(y=self.target_value, color='r', linestyle='--')
-
-        plt.plot(self.minh_of_z_tracker, marker='o', linestyle='-')
-        plt.xlabel('Iteration k')
-        plt.ylabel('minh_of_z')
-        plt.title('Variation of Objective Function Value with Each Iteration')
-        plt.grid(True)
-        plt.show()
+   
 
 
-def func(x0):
-    x1, x2 = x0["x1"], x0["x2"]
-
-    def multinodal(x):
-        return (np.sin(0.05 * np.pi * x) ** 6) / 2 ** (2 * ((x - 10) / 80) ** 2)
-
-    return -(multinodal(x1) + multinodal(x2)) + np.random.normal(0, 0.3)
-
-
-dom = {"x1": [i for i in range(101)], "x2": [i for i in range(101)]}
-
-sr_userDef = stochastic_ruler(space=dom, maxevals=20, prob_type="opt_sol", func=func, neigh_structure=1)
-print(sr_userDef.optsol())
-sr_userDef.plot_minh_of_z()

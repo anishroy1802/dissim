@@ -17,9 +17,10 @@ import time
 import random
 import matplotlib.pyplot as plt
 from scipy.spatial.distance import euclidean
+from itertools import product
+from scipy.spatial.distance import euclidean
+from typing import Union, List
 
-
-### Simulated Annealing algorithm
 
 
 def tracing_start():
@@ -55,31 +56,156 @@ import math
 import itertools
 import random
 
-"""Memory Tracing:
- The 'tracing_start' function is defined to manage memory tracing. It begins by stopping any ongoing memory tracing using 'tracemalloc.stop()' and checking if tracing is currently active with 'tracemalloc.is_tracing()'. Afterward, it starts memory tracing with 'tracemalloc.start()' and checks the tracing status again. This function is invaluable for profiling memory usage, enabling developers to gain insights into memory allocation and deallocation patterns during code execution. It can help identify potential memory-related issues and optimize memory usage in the application."""
+"""
+Kin Nelson Algorithm
+"""
 
-def tracing_start():
-    tracemalloc.stop()
-    print("Tracing Status: ", tracemalloc.is_tracing())
-    tracemalloc.start()
-    print("Tracing Status: ", tracemalloc.is_tracing())
+class KN():
 
+    def __init__(self, domain, step_size, func, alpha, delta, n_0= 2, max_evals= 300 ):
+        self.domain = domain
+        self.step_size = step_size
+        self.func = func
+        self.alpha = alpha
+        self.delta = delta
+        self.max_evals= max_evals
+        self.n_0 = n_0
+        self.dimensions = len(self.domain)
+        sol_space = []
+        for i in range(self.dimensions):
+            sol_space.append(np.arange(self.domain[i][0], self.domain[i][1]+ step_size[i], step_size[i]))
+        
+        self.solution_space = list(itertools.product(*sol_space))
+        self.confidence_lvl = 1 - self.alpha
+        #self.n_systems = len(self.solution_space)
+        self.eta = 0.5 * (((2*self.alpha)/(len(self.solution_space)-1))**(-2 / (self.n_0 - 1)) - 1)
+        #self.r = self.n_0
+        
+        #print(self.solution_space)
+
+    def initialize(self):
+        a = len(self.solution_space)
+        self.h = math.sqrt(2*self.eta*(self.n_0 - 1))
+        self.sol_space_dict = {}
+        for i in range(len(self.solution_space)):
+            self.sol_space_dict[i] = self.solution_space[i]
+        
+        self.X_i_bar = [0]*len(self.solution_space)
+        self.X_i_bar_n_0 = [0]*len(self.solution_space)
+        self.S_sq = np.zeros((a, a))
+        S_sq = np.zeros((a, a))
+        a = len(self.solution_space)
+        self.sim_vals = np.zeros((a, self.n_0)).tolist()
+        #now we have a dict mapping index to an (x,y) pair
+        for i in range(len(self.solution_space)):
+            for simrep in range(0, self.n_0):
+                self.sim_vals[i][simrep] = self.func(self.sol_space_dict[i])
+                self.X_i_bar_n_0[i] += self.sim_vals[i][simrep]
+            
+            self.X_i_bar[i] = sum(self.sim_vals[i])
+            self.X_i_bar[i] = self.X_i_bar[i]/len(self.sim_vals[i])
+            self.X_i_bar_n_0[i] = self.X_i_bar_n_0[i]/self.n_0
+        
+        #self.X_i_bar_n_0 = self.X_i_bar[:self.n_0]
+        for i in range(a):
+            for j in range(a):
+                S_sq[i][j] = (1/(self.n_0 - 1)) * (sum(self.sim_vals[i][0:self.n_0]) 
+                                                      - sum(self.sim_vals[j][0:self.n_0])
+                                                      - (self.X_i_bar_n_0[i] - self.X_i_bar_n_0[j]))**2
+        
+        #print(S_sq)
+        return S_sq
+        
+    def optimize(self):
+        if self.max_evals< 200:
+            print("Too small budget")
+            return 
+
+        self.S_sq = self.initialize()
+        r = self.n_0
+        a = len(self.solution_space)
+        # self.check = np.zeros((a,a))
+        I_old = set()
+        #Screening Procedure for Kim-Nelson Algorithm
+        for i in range(0, a):
+            I_old.add(i)
+
+
+        #print(I_old)
+        #max_evals= 0
+        while len(I_old)!=1 and self.max_evals> 0:
+            print("Budget left: ", self.max_evals)
+            #print(self.X_i_bar)
+            #print("iteration: ", k)
+            print("value of r: ", r)
+            print("set at beginning of iteration: ",I_old)
+            #print(I_old)
+            I = set()
+
+            self.check = np.zeros((a,a))
+            self.W = np.zeros((len(self.solution_space), len(self.solution_space))) 
+            for i in range(len(self.solution_space)):
+                for j in range(len(self.solution_space)):
+                    b = (self.delta/(2*r))*(((self.h**2 * self.S_sq[i][j])/(self.delta**2)) - r)
+                    self.W[i][j] = max(0, b)
+
+            #now we have defined our W matrix
+            for i in range(0,a):
+                for j in range(0,a):
+                    if ((i!=j) and (i in I_old) and (j in I_old)):
+                        #print("a-b; a: ", self.X_i_bar[i], " b: ", self.X_i_bar[j] - self.W[i][j])
+                        if self.X_i_bar[i] >= self.X_i_bar[j] - self.W[i][j]:
+                            self.check[i][j] = 1
+
+                row_sum = sum(self.check[i])
+                if row_sum == len(I_old) - 1:
+                    #print(i, " added")
+                    I.add(i)
+                # else:
+                #     print(i, "not  added")
+            
+            #print(self.check)
+            #print(I)
+            # if k> 10:
+            #     break
+            if len(I) == 1:
+                print("Got single optimal solution: ")
+                return I
+            else:
+                I_old = I.copy()
+                r += 1
+                #k+= 1
+                for i in range(a):
+                    if i in I_old:
+                        self.sim_vals[i].append(self.func(self.sol_space_dict[i]))
+                        self.max_evals-= 1
+                        self.X_i_bar[i]  = (self.X_i_bar[i]*(r-1) + self.sim_vals[i][-1])/r
+                
+
+
+        print("Final set after exhausting budget: ")   
+        return I
+    
+
+"""
+Simulated Anealing Algorithm
+"""
 class SA():
 
-    def __init__(self, domain, step_size, T, custom_H_function, nbd_structure, k= 300,  initial_solution=None, random_seed=None, percent_reduction=None):
+    def __init__(self, domain, step_size, T, func, neigh_structure = 1, max_evals= 300,  init_solution=None, random_seed=None, percent_reduction=None):
 
         self.domain = domain #n*2 matrix
         self.dimensions = len(self.domain)
         print("Number of dimensions:", self.dimensions)
         self.step_size = step_size #n*1 matrix
         self.T = T
-        self.k = k
-        self.custom_H_function = custom_H_function
+        self.max_evals = max_evals
+        self.func = func
         # self.L = [i + 200 for i in range(0, k)]
-        self.initial_solution = initial_solution
+        self.init_solution = init_solution
         self.random_seed = random_seed
         self.X_opt = []
-        self.nbd_structure = nbd_structure
+        self.neigh_structure = neigh_structure
         self.function_values = []
         self.initial_function_value = None  # Store the initial function value
         self.percent_reduction = percent_reduction
@@ -102,7 +228,7 @@ class SA():
 
     def create_neighborhood(self):
         self.neighborhoods = {}
-        if self.nbd_structure=="N1":
+        if self.neigh_structure==1:
             for element in self.solution_space:
                 N = [el for el in self.solution_space if el != element]
                 self.neighborhoods[element] = N
@@ -142,7 +268,7 @@ class SA():
         self.R_prime = {}
         self.R = {}
 
-        if self.nbd_structure == "N1":
+        if self.neigh_structure == 1:
             for element in self.solution_space:
                 self.R[element] = {}
                 self.R_prime[element] = {}
@@ -182,7 +308,7 @@ class SA():
         # for element in self.solution_space:
         #     if self.neighborhoods[element] is not None:
         #         for neighbor in self.neighborhoods[element]:
-        #             if self.nbd_structure=="N1":
+        #             if self.neigh_structure==1:
         #                 self.R_prime[element][neighbor] = euclidean(element, neighbor)
         #                 self.D[element] += euclidean(element, neighbor)
         #             else:
@@ -198,7 +324,7 @@ class SA():
         self.df = pd.DataFrame()
         self.x_values = []
         self.fx_values = []
-        if self.k < 200:
+        if self.max_evals < 200:
             print("Error: Too less number of replications")
             return
 
@@ -232,7 +358,7 @@ class SA():
                     self.R_prime_matrix[i][j] = 0
 
         #print(self.R_matrix)
-        if self.initial_solution is None:
+        if self.init_solution is None:
             if self.random_seed is None:
                 random.seed(1234)
             else:
@@ -240,7 +366,7 @@ class SA():
             random_index = random.randint(0, len(self.solution_space) - 1)
             X0 = position_index[random_index]
         else:
-            X0 = self.initial_solution
+            X0 = self.init_solution
         print("initial solution:", X0)
 
         self.V={}
@@ -248,9 +374,9 @@ class SA():
         self.X_opt.append(X0)
         self.fx_opt = []
 
-        self.function_values.append(self.custom_H_function(list(X0)))
+        self.function_values.append(self.func(list(X0)))
         j = 0
-        while self.k>0:
+        while self.max_evals>0:
             x_j = self.X_opt[j]
             N = self.neighborhoods[x_j]
             transition_probs = self.R_matrix[reverse_mapping[x_j]]
@@ -262,10 +388,10 @@ class SA():
             fx = 0
             fz = 0
 
-            simreps = min(5, self.k)
+            simreps = min(5, self.max_evals)
             for sim_iter in range(simreps):
-                fx += self.custom_H_function(list(x_j))
-                fz += self.custom_H_function(list(z_j))
+                fx += self.func(list(x_j))
+                fz += self.func(list(z_j))
 
             fx = fx / simreps
             fz = fz / simreps
@@ -299,11 +425,11 @@ class SA():
             self.fx_opt.append(fx_opt_next)
 
 
-            self.k = self.k - simreps
+            self.max_evals = self.max_evals - simreps
             j = j+1
 
             # # Calculate and store the function value for this iteration
-            # current_function_value = self.custom_H_function(list(x_opt_next))
+            # current_function_value = self.func(list(x_opt_next))
             # self.function_values.append(current_function_value)
 
             # #if self.percent_reduction is not None:
@@ -342,7 +468,10 @@ class SA():
 
         # Create a DataFrame using pandas
         self.df = pd.DataFrame({'x': x_values, 'f(x)': fx_values})
-        self.change = decrease_percentages[end_index]
+        if end_index is not None:
+            self.change = decrease_percentages[end_index]
+        else:
+            self.change = decrease_percentages[-1]
         self.x_values = x_values
         self.fx_values = fx_values
         # Display the DataFrame
@@ -355,7 +484,7 @@ class SA():
         # plt.plot(range(len(self.function_values)), self.function_values, marker='o', linestyle='-')
         # plt.xlabel('Iteration')
         # plt.ylabel('Function Value')
-        # plt.title('Function Value vs. Iteration; Neighborhood Structure: ' + str(self.nbd_structure))
+        # plt.title('Function Value vs. Iteration; Neighborhood Structure: ' + str(self.neigh_structure))
         # plt.grid(True)
         # plt.show()
 
@@ -371,34 +500,37 @@ class SA():
         print("% reduction:", self.change)
         #print(self.function_values)
 
-### Adaptive Hyperbox Algorithm
-
-def tracing_start():
-    tracemalloc.stop()
-    print("nTracing Status : ", tracemalloc.is_tracing())
-    tracemalloc.start()
-    print("Tracing Status : ", tracemalloc.is_tracing())
-def tracing_mem():
-    first_size, first_peak = tracemalloc.get_traced_memory()
-    peak = first_peak/(1024*1024)
-    print("Peak Size in MB - ", peak)
+"""
+Adaptive Hyperbox Algorithm
+"""
 
 class AHA():
-  def __init__(self, func,global_domain, percent = None):
+  def __init__(self,func,domain, step_size, max_evals, init_solution, m, random_seed  = None, percent_improvement = None):
     """Constructor method that initializes the instance variables of the class AHA
 
     Args:
       func (function): A function that takes in a list of integers and returns a float value representing the objective function.
-      global_domain (list of lists): A list of intervals (list of two integers) that defines the search space for the optimization problem.
+      domain (list of lists): A list of intervals (list of two integers) that defines the search space for the optimization problem.
     """
     self.func = func
-    self.percent = percent
-    self.global_domain = global_domain
+    self.percent_improvement = percent_improvement
+    self.domain = domain
+    self.random_seed = random_seed
+    self.step_size = step_size
+    self.max_evals = max_evals
+    self.init_solution = init_solution
+    self.m = m
     # self.initial_choice = initial_choice
     self.x_star = []
-    #self.initial_choice = self.sample(global_domain)
+    #self.initial_choice = self.sample(domain)
+    sol_space = []
+    self.dimensions  = len(self.step_size)
+    for i in range(self.dimensions):
+        sol_space.append(np.arange(self.domain[i][0], self.domain[i][1]+ step_size[i], step_size[i]))
     
-  def sample(self,domain):
+    self.solution_space = list(itertools.product(*sol_space))
+    
+  def sample(self, domain):
     """A helper method that samples a point from the given domain. 
       It returns a list of integers representing a point in the search space.
 
@@ -409,9 +541,14 @@ class AHA():
         list: A list of integers representing a point in the search space.
     """
     x = []
-    for d in domain: #discrete domain from a to b
+    for i,d in enumerate(domain): #discrete domain from a to b
       a,b = d[0],d[1]
-      x.append(np.random.randint(a,b+1))
+      stepsize = self.step_size[i]
+      num_steps = (b - a) // stepsize + 1
+      random_index = np.random.randint(num_steps)
+      random_number = a + random_index * stepsize
+
+      x.append(random_number)
     
     return x
 
@@ -469,60 +606,61 @@ class AHA():
 
 
 
-  def AHAalgolocal(self,m,loc_domain,x0, max_k = 500):
+  def optimize(self):
     """ Runs the AHA algorithm for local optimization.
-
-    Args:
-        max_k (int): The maximum number of replications of simulation to run.
-        m (int): The number of random samples to generate at each iteration.
-        loc_domain (list of lists): A list of intervals (list of two integers) that defines the local search space.
-        x0 (list): A list of integers representing the initial solution.
 
     Returns:
         list of lists: A list of solutions found by the algorithm at each iteration.
     """
     #initialisation
-    # print(x0)
-    self.x0 = x0
-    if max_k < 200:
+    # print(self.init_solution)
+    m = self.m
+    if self.max_evals < 200:
        print("Error: too less simulation budget")
     tracing_start()
     start = time.time()
+    if self.init_solution is None:
+       if self.random_seed is None:
+            random.seed(1234)
+       else:
+            random.seed(self.random_seed)
+       self.init_solution = random.choice(self.solution_space)
+       
     self.fxvals = []
     self.fx_star = []
     self.all_x = []
     self.all_fx = []
-    self.x_star.append(x0)
-    #self.initval = self.func(x0)
+    self.x_star.append(self.init_solution)
+    #self.initval = self.func(self.init_solution)
     
     #print(self.initval)
     epsilon = []
-    epsilon.append([x0])
+    epsilon.append([self.init_solution])
     G = 0
     self.initval = 0
     for i in range(5):
-      G += self.func(x0)
-      self.initval += self.func(x0)
+      G += self.func(self.init_solution)
+      self.initval += self.func(self.init_solution)
     G_bar_best = G/5
     self.initval = self.initval/5
     
 
-    max_k = max_k - 5
+    self.max_evals = self.max_evals - 5
     l_k = []
     u_k = []
-    for i in range(len(loc_domain)):
-        l_k.append(loc_domain[i][0])
-        u_k.append(loc_domain[i][1])
+    for i in range(len(self.domain)):
+        l_k.append(self.domain[i][0])
+        u_k.append(self.domain[i][1])
 
     # c = [domain]
     # phi = domain
 
-    all_sol = [x0]
+    all_sol = [self.init_solution]
     self.fx_star.append(self.initval)
     all_fx = [self.initval]
-    all_x = [x0]
+    all_x = [self.init_solution]
     uniq_sol_k =[]
-    while max_k > 0:
+    while self.max_evals > 0:
       k = 1
       all_sol_k = []
       
@@ -546,7 +684,7 @@ class AHA():
       # print(epsilonk)
       x_star_k = self.x_star[k-1]
       for i in epsilonk:
-        numsimreps = min(5, max_k)
+        numsimreps = min(5, self.max_evals)
         g_val = 0
         for j in range(numsimreps):
           g_val += self.func(i)
@@ -558,7 +696,7 @@ class AHA():
         all_fx.append(G_bar_best)
         all_x.append(x_star_k)
         self.decrease = 100*((self.initval - all_fx[-1] ))/ abs(self.initval)
-      if ((self.percent is not None) and (self.decrease >= self.percent)):
+      if ((self.percent_improvement is not None) and (self.decrease >= self.percent_improvement)):
         print("Stopping criterion met (% reduction in function value). Stopping optimization.")
         self.x_star.append(x_star_k)
         self.fx_star.append(G_bar_best)
@@ -567,8 +705,8 @@ class AHA():
       #self.decrease = 100*((self.initval - self.fx_star[-1] ))/ abs(self.initval)
       #epsilon.append(epsilonk)
       k += 1
-      max_k = max_k - numsimreps
-      # if ((self.percent is not None) and (self.decrease >= self.percent)):
+      self.max_evals = self.max_evals - numsimreps
+      # if ((self.percent_improvement is not None) and (self.decrease >= self.percent_improvement)):
       #   print("Stopping criterion met (% reduction in function value). Stopping optimization.")
       #   break
 
@@ -581,12 +719,12 @@ class AHA():
     self.all_fx = all_fx
     return self.x_star
   
-  def plot_iterations(self):
+  def print_function_values(self):
 
     self.df = pd.DataFrame({'x': self.all_x, 'f(x)': self.all_fx})
     print (self.df)
     print("iters:",len(self.all_x))
-    print("initial x: ", self.x0, "initial fx estimated: ", self.initval)
+    print("initial x: ", self.init_solution, "initial fx estimated: ", self.initval)
     print("optimal x* values: ", self.x_star)
     print("optimal f(x*) values: ",self.fx_star)
     print("% decrease:", self.decrease )
@@ -600,102 +738,93 @@ class AHA():
     # plt.show()
 
 
-  def AHAalgoglobal(self,iter,max_k,m):
-    """ Runs the AHA algorithm for global optimization.
+  # def AHAalgoglobal(self,iter,max_k,m):
+  #   """ Runs the AHA algorithm for global optimization.
 
-    Args:
-        iter (int): The number of iterations to run.
-    max_k (int): The maximum number of iterations to run for each iteration of the global search.
-    m (int): The number of random samples to generate at each iteration.
+  #   Args:
+  #       iter (int): The number of iterations to run.
+  #   max_k (int): The maximum number of iterations to run for each iteration of the global search.
+  #   m (int): The number of random samples to generate at each iteration.
 
-    Returns:
-        tuple: A tuple containing the best solution found and its corresponding objective value.
-    """
-    all_sols = []
-    best_sol = None
-    best_val = None
+  #   Returns:
+  #       tuple: A tuple containing the best solution found and its corresponding objective value.
+  #   """
+  #   all_sols = []
+  #   best_sol = None
+  #   best_val = None
 
-    # for i in range(iter):
-    #   new_dom = []
-    #   for dom in self.global_domain:
-    #     if(dom[0]!=dom[1]):
-    #       val1 = np.random.randint(dom[0],dom[1]+1)
-    #       val2 = np.random.randint(dom[0],dom[1]+1)
-    #       while(val1==val2):
-    #         val2 = np.random.randint(dom[0],dom[1]+1)
-    #       if(val1<val2):
-    #         new_dom.append([val1,val2])
-    #       else:
-    #         new_dom.append([val2,val1])
-    #     else:
-    #       new_dom.append(dom)
+  #   # for i in range(iter):
+  #   #   new_dom = []
+  #   #   for dom in self.domain:
+  #   #     if(dom[0]!=dom[1]):
+  #   #       val1 = np.random.randint(dom[0],dom[1]+1)
+  #   #       val2 = np.random.randint(dom[0],dom[1]+1)
+  #   #       while(val1==val2):
+  #   #         val2 = np.random.randint(dom[0],dom[1]+1)
+  #   #       if(val1<val2):
+  #   #         new_dom.append([val1,val2])
+  #   #       else:
+  #   #         new_dom.append([val2,val1])
+  #   #     else:
+  #   #       new_dom.append(dom)
 
-    for i in range(iter):
-      new_dom = []
-      for dom in self.global_domain:
-        D = (dom[1] - dom[0])
-        if(D>=2 and D<=20):
-          K=3
-        elif(D>20 and D<=50):
-          K=5
-        elif(D>50 and D<=100):
-          K = 10
-        elif(D>100):
-          K = 50
-
-
-
-        if(dom[1]-dom[0]>2):
-          step = (dom[1]-dom[0])//K
-          val1 = np.random.randint(dom[0],dom[1]+1)
-          if(val1+step+1<dom[1]):
-            val2 = np.random.randint(val1+1,val1+step+1)
-          else:
-            val2 = np.random.randint(val1-step-1,val1)
-          if(val1<val2):
-            new_dom.append([val1,val2])
-          else:
-            new_dom.append([val2,val1])
+  #   for i in range(iter):
+  #     new_dom = []
+  #     for dom in self.domain:
+  #       D = (dom[1] - dom[0])
+  #       if(D>=2 and D<=20):
+  #         K=3
+  #       elif(D>20 and D<=50):
+  #         K=5
+  #       elif(D>50 and D<=100):
+  #         K = 10
+  #       elif(D>100):
+  #         K = 50
 
 
-        elif(dom[0]!=dom[1]):
-          val1 = np.random.randint(dom[0],dom[1]+1)
-          val2 = np.random.randint(dom[0],dom[1]+1)
-          while(val1==val2):
-            val2 = np.random.randint(dom[0],dom[1]+1)
-          if(val1<val2):
-            new_dom.append([val1,val2])
-          else:
-            new_dom.append([val2,val1])
-        else:
-          new_dom.append(dom)
 
-      # print(new_dom)
-      x0 = self.sample(new_dom)
-      solx = self.AHAalgolocal(max_k,m,new_dom,x0)
-
-      valx = self.func(solx[-1])
-      if(best_sol == None or valx<best_val):
-        best_sol = solx[-1]
-        best_val = valx
-      all_sols.append(solx[-1])
-
-    return all_sols,best_sol,best_val
-#Stochastic Ruler
-
-import numpy as np
-import math
-from typing import Union
-import pandas as pd
-import time
-import random
-import matplotlib.pyplot as plt
-from itertools import product
-from scipy.spatial.distance import euclidean
-from typing import Union, List
+  #       if(dom[1]-dom[0]>2):
+  #         step = (dom[1]-dom[0])//K
+  #         val1 = np.random.randint(dom[0],dom[1]+1)
+  #         if(val1+step+1<dom[1]):
+  #           val2 = np.random.randint(val1+1,val1+step+1)
+  #         else:
+  #           val2 = np.random.randint(val1-step-1,val1)
+  #         if(val1<val2):
+  #           new_dom.append([val1,val2])
+  #         else:
+  #           new_dom.append([val2,val1])
 
 
-class stochastic_ruler:
+  #       elif(dom[0]!=dom[1]):
+  #         val1 = np.random.randint(dom[0],dom[1]+1)
+  #         val2 = np.random.randint(dom[0],dom[1]+1)
+  #         while(val1==val2):
+  #           val2 = np.random.randint(dom[0],dom[1]+1)
+  #         if(val1<val2):
+  #           new_dom.append([val1,val2])
+  #         else:
+  #           new_dom.append([val2,val1])
+  #       else:
+  #         new_dom.append(dom)
+
+  #     # print(new_dom)
+  #     self.init_solution = self.sample(new_dom)
+  #     solx = self.optimize(max_k,m,new_dom,self.init_solution)
+
+  #     valx = self.func(solx[-1])
+  #     if(best_sol == None or valx<best_val):
+  #       best_sol = solx[-1]
+  #       best_val = valx
+  #     all_sols.append(solx[-1])
+
+  #   return all_sols,best_sol,best_val
+  
+  """
+  Stochastic Ruler Method
+  """
+
+  class stochastic_ruler:
     """
     The class definition for the implementation of the Stochastic Ruler Random Search Method;
     Alrefaei, Mahmoud H., and Sigrun Andradottir.
@@ -703,29 +832,30 @@ class stochastic_ruler:
     Proceedings Winter Simulation Conference. IEEE, 1996.
     """
 
-    def __init__( self, space: dict, maxevals: int = 300, prob_type="opt_sol", func=None, 
-        percentReduction: int = None, init_solution: dict = None, lower_bound: int = None, 
-        upper_bound: int = None, neigh_structure : int = 1):
+    def __init__( self, space: dict, max_evals: int = 300, prob_type="opt_sol", func=None, 
+        percent_improvement: int = None, init_solution: dict = None, lower_bound: int = None, 
+        upper_bound: int = None, neigh_structure : int = 1, print_solutions: bool = False):
         """The constructor for declaring the instance variables in the Stochastic Ruler Random Search Method
 
         Args:
             space (dict): allowed set of values for the set of hyperparameters in the form of a dictionary
                         hyperparamater name -> key
                         the list of allowed values for the respective hyperparameter -> value
-            maxevals (int, optional): maximum number of evaluations for the performance measure; Defaults to 100.
+            max_evals (int, optional): maximum number of evaluations for the performance measure; Defaults to 100.
         """
         self.space = space  # domain
         self.prob_type = ( prob_type ) # hyperparam opt (hyp_opt), optimal solution (opt_sol) 
         self.data = None
-        self.maxevals = maxevals
+        self.max_evals = max_evals
         self.initial_choice_HP = None
         self.Neigh_dict = self.help_neigh_struct()
         self.func = func
-        self.percentReduction = percentReduction
+        self.percent_improvement = percent_improvement
         self.init_solution = init_solution
         self.lower_bound = lower_bound
         self.upper_bound = upper_bound
         self.neigh_structure = neigh_structure
+        self.print_solutions = print_solutions
 
     def help_neigh_struct(self) -> dict:
         Dict = {}
@@ -786,6 +916,23 @@ class stochastic_ruler:
         return dict(zip(initial_solution.keys(), chosen_combination))
 
 
+    def no_of_solutions_visited(self, max_evals):
+
+        """The method for calculating the maximum solutions that can be visited from the imput budget
+        Args:
+            max_evals (int): the budget in terms of simulations
+
+        Returns:
+            int: the maximum number of solutions that can be visited as a part of the algorithm
+        """
+
+        sols = -1
+        budget_exhausted=0
+        while budget_exhausted <= max_evals:
+            budget_exhausted+=int(math.log(sols + 10, math.e) / math.log(5, math.e))
+            sols+=1
+
+        return sols
 
 
     def det_a_b(self, domain, max_eval, X=None, y=None):
@@ -808,23 +955,6 @@ class stochastic_ruler:
             minm = self.lower_bound
             maxm = self.upper_bound
 
-        # else:
-        #     max_iter = (max_eval) // len(domain)
-        # maxm = -1 * math.inf
-        # minm = math.inf
-        # neigh = {}
-        # for i in range(max_iter):
-        #     for dom in domain:
-        #         neigh[dom] = np.random.choice(domain[dom])
-        #     val = self.run(neigh, neigh, X, y)
-        #     minm = min(minm, val)
-        #     maxm = max(maxm, val)
-
-        # return (minm, maxm)
-    
-        # if self.lower_bound is not None and self.upper_bound is not None:
-        #     minm = self.lower_bound
-        #     maxm = self.upper_bound
         else:
             max_iter = 20
         
@@ -833,15 +963,15 @@ class stochastic_ruler:
             minm = math.inf
 
             for i in range(max_iter):
-                print("i = ", i)
+                # print("i = ", i)
                 for j in range(Reps_for_each_sol):
-                    print("j = ", j)
+                    # print("j = ", j)
                     # Randomly sample from the domain for each variable
                     neigh = {var: np.random.choice(values) for var, values in domain.items()}
                     temp = self.run(neigh, neigh, X, y)
                     minm = min(minm, temp)
                     maxm = max(maxm, temp)
-                    print(minm, maxm)
+                    #print(minm, maxm)
 
         return (minm, maxm)
 
@@ -885,7 +1015,7 @@ class stochastic_ruler:
 
         self.minh_of_z_tracker = []
 
-        if self.percentReduction is not None:
+        if self.percent_improvement is not None:
 
             initial_choice_HP = {}
 
@@ -899,7 +1029,7 @@ class stochastic_ruler:
             init_value = self.func(initial_choice_HP)
             print("Initial value = ", init_value)
 
-            self.target_value = init_value * (1 - self.percentReduction * 0.01) if init_value >= 0 else init_value * (1 + self.percentReduction * 0.01)
+            self.target_value = init_value * (1 - self.percent_improvement * 0.01) if init_value >= 0 else init_value * (1 + self.percent_improvement * 0.01)
             print("Target Value = ", self.target_value)
             print("------")
 
@@ -907,16 +1037,15 @@ class stochastic_ruler:
             k = 1
             x_k = initial_choice_HP
             opt_x = x_k
-            a, b = self.det_a_b(self.space, self.maxevals // 10, X, y)
-            # a = -2
-            # b = 1
-            print(a,b)
+            a, b = self.det_a_b(self.space, self.max_evals // 10, X, y)
+            # print("a,b:")
+            # print(a,b)
             minh_of_z = b
             # step 0 ends here
-            while k < self.maxevals + 1:
-                # print("minz"+str(minh_of_z))
-                # step 1:  Given xk = x, choose a candidate zk from N(x)
+            # print("total evals: ", self.no_of_solutions_visited(self.max_evals))
+            while k < self.no_of_solutions_visited(self.max_evals) + 1:
 
+                # step 1:  Given xk = x, choose a candidate zk from N(x)
                 if self.neigh_structure == 1:
                     zk = self.next_solution_based_on_distance(x_k)                  #N1
                 
@@ -927,21 +1056,22 @@ class stochastic_ruler:
                 # step 1 ends here
                 # step 2: Given zk = z, draw a sample h(z) from H(z)
                 iter = self.Mf(k)
+                
                 for i in range(iter):
                     h_of_z = self.run(zk, zk, X, y)
-                    print("value at iter: ", h_of_z)
+                    # print("value at iter: ", h_of_z)
+
+                    if self.print_solutions:
+                        print("k: " , k, "x_k: ", x_k, "f(x_k): ", h_of_z )
                     
 
                     if h_of_z <= self.target_value :
-                        print("-------")
-                        print("target val:", self.target_value)
-                        print("h of z at stop: ", h_of_z)
+                        # print("h of z at stop: ", h_of_z)
 
-                        print("Stopping criterion of ", self.percentReduction,"% reduction in function value. Stopping optimization.")
+                        print("Stopping criterion of ", self.percent_improvement,"% reduction in function value. Stopping optimization.")
                         # return h_of_z, opt_x, a, b, minh_of_z_tracker
                         self.minh_of_z_tracker.append(h_of_z)
                         print(self.minh_of_z_tracker)
-                        #print(target_value)
                         return h_of_z, opt_x, a, b
 
                     u = np.random.uniform(a, b)  # Then draw a sample u from U(a, b)
@@ -953,7 +1083,7 @@ class stochastic_ruler:
                             opt_x = x_k
                         break
                     # Otherwise draw another sample h(z) from H(z) and draw another sample u from U(a, b), part of the loop where iter = self.Mf(k) tells the maximum number of failures allowed
-                    if h_of_z < u:  # If all Mk tests have failed
+                    if h_of_z <= u:  # If all Mk tests have failed
                         x_k = zk
                         k += 1
                         if h_of_z < minh_of_z:
@@ -968,7 +1098,7 @@ class stochastic_ruler:
             return minh_of_z, opt_x, a, b 
 
         else:
-            print("No percentRedn criteria set:")
+            print("No percent Reduction criteria set:")
             initial_choice_HP = {}
 
             if self.init_solution is None:
@@ -979,20 +1109,20 @@ class stochastic_ruler:
 
             # printing initial value for checking
             init_value = self.func(initial_choice_HP)
-            print(init_value)
+            print("initial_value: ", init_value)
 
             # step 0: Select a starting point x0 in S and let k = 0
             k = 1
             x_k = initial_choice_HP
             opt_x = x_k
-            a, b = self.det_a_b(self.space, self.maxevals // 10, X, y)
+            a, b = self.det_a_b(self.space, self.max_evals // 10, X, y)
             # a = -2
             # b= 1
-            print(a,b)
+            # print(a,b)
             minh_of_z = b
             # step 0 ends here
-            while k < self.maxevals + 1:
-                # print("minz"+str(minh_of_z))
+            while k < self.no_of_solutions_visited(self.max_evals) + 1:
+                
                 # step 1:  Given xk = x, choose a candidate zk from N(x)
 
                 if self.neigh_structure == 1:
@@ -1006,7 +1136,10 @@ class stochastic_ruler:
                 iter = self.Mf(k)
                 for i in range(iter):
                     h_of_z = self.run(zk, zk, X, y)
-                    print(h_of_z)
+                    # print(h_of_z)
+
+                    if self.print_solutions:
+                        print("k: " , k, "x_k: ", x_k, "f(x_k): ", h_of_z )
                     
 
                     u = np.random.uniform(a, b)  # Then draw a sample u from U(a, b)
@@ -1066,164 +1199,3 @@ class stochastic_ruler:
             # print(funcval,opt_x)
             return funcval
         # print("acc" + str(acc))
-
-    # def plot_minh_of_z(self):
-    #     """Plot the variation of minh_of_z with each iteration."""
-    #     # _, _, _, _, minh_of_z_tracker = self.SR_Algo()  Call the modified SR_Algo method
-
-    #     plt.figure(figsize=(10, 6))
-
-    #     if self.percentReduction is not None:
-    #         plt.axhline(y=self.target_value, color='r', linestyle='--')
-
-    #     plt.plot(self.minh_of_z_tracker, marker='o', linestyle='-')
-    #     plt.xlabel('Iteration k')
-    #     plt.ylabel('minh_of_z')
-    #     plt.title('Variation of Objective Function Value with Each Iteration')
-    #     plt.grid(True)
-    #     plt.show()
-
-
-###Kim-Nelson Method
-
-def tracing_start():
-    """
-    Starts tracing of memory allocation using tracemalloc.
-    """
-    tracemalloc.stop()
-    print("nTracing Status : ", tracemalloc.is_tracing())
-    tracemalloc.start()
-    print("Tracing Status : ", tracemalloc.is_tracing())
-def tracing_mem():
-    """
-    Prints the peak memory usage.
-    """
-    first_size, first_peak = tracemalloc.get_traced_memory()
-    peak = first_peak/(1024*1024)
-    print("Peak Size in MB - ", peak)
-
-    
-class KN():
-
-    def __init__(self, domain, step_size, custom_H_function, alpha, delta, n_0= 2, k = 300 ):
-        self.domain = domain
-        self.step_size = step_size
-        self.custom_H_function = custom_H_function
-        self.alpha = alpha
-        self.delta = delta
-        self.k = k
-        self.n_0 = n_0
-        self.dimensions = len(self.domain)
-        sol_space = []
-        for i in range(self.dimensions):
-            sol_space.append(np.arange(self.domain[i][0], self.domain[i][1]+ step_size[i], step_size[i]))
-        
-        self.solution_space = list(itertools.product(*sol_space))
-        self.confidence_lvl = 1 - self.alpha
-        #self.n_systems = len(self.solution_space)
-        self.eta = 0.5 * (((2*self.alpha)/(len(self.solution_space)-1))**(-2 / (self.n_0 - 1)) - 1)
-        #self.r = self.n_0
-        
-        #print(self.solution_space)
-
-    def initialize(self):
-        a = len(self.solution_space)
-        self.h = math.sqrt(2*self.eta*(self.n_0 - 1))
-        self.sol_space_dict = {}
-        for i in range(len(self.solution_space)):
-            self.sol_space_dict[i] = self.solution_space[i]
-        
-        self.X_i_bar = [0]*len(self.solution_space)
-        self.X_i_bar_n_0 = [0]*len(self.solution_space)
-        self.S_sq = np.zeros((a, a))
-        S_sq = np.zeros((a, a))
-        a = len(self.solution_space)
-        self.sim_vals = np.zeros((a, self.n_0)).tolist()
-        #now we have a dict mapping index to an (x,y) pair
-        for i in range(len(self.solution_space)):
-            for simrep in range(0, self.n_0):
-                self.sim_vals[i][simrep] = self.custom_H_function(self.sol_space_dict[i])
-                self.X_i_bar_n_0[i] += self.sim_vals[i][simrep]
-            
-            self.X_i_bar[i] = sum(self.sim_vals[i])
-            self.X_i_bar[i] = self.X_i_bar[i]/len(self.sim_vals[i])
-            self.X_i_bar_n_0[i] = self.X_i_bar_n_0[i]/self.n_0
-        
-        #self.X_i_bar_n_0 = self.X_i_bar[:self.n_0]
-        for i in range(a):
-            for j in range(a):
-                S_sq[i][j] = (1/(self.n_0 - 1)) * (sum(self.sim_vals[i][0:self.n_0]) 
-                                                      - sum(self.sim_vals[j][0:self.n_0])
-                                                      - (self.X_i_bar_n_0[i] - self.X_i_bar_n_0[j]))**2
-        
-        #print(S_sq)
-        return S_sq
-        
-    def screening(self):
-        if self.k < 200:
-            print("Too small budget")
-            return 
-
-        self.S_sq = self.initialize()
-        r = self.n_0
-        a = len(self.solution_space)
-        # self.check = np.zeros((a,a))
-        I_old = set()
-        for i in range(0, a):
-            I_old.add(i)
-
-
-        #print(I_old)
-        #k = 0
-        while len(I_old)!=1 and self.k > 0:
-            print("Budget left: ", self.k)
-            #print(self.X_i_bar)
-            #print("iteration: ", k)
-            print("value of r: ", r)
-            print("set at beginning of iteration: ",I_old)
-            #print(I_old)
-            I = set()
-
-            self.check = np.zeros((a,a))
-            self.W = np.zeros((len(self.solution_space), len(self.solution_space))) 
-            for i in range(len(self.solution_space)):
-                for j in range(len(self.solution_space)):
-                    b = (self.delta/(2*r))*(((self.h**2 * self.S_sq[i][j])/(self.delta**2)) - r)
-                    self.W[i][j] = max(0, b)
-
-            #now we have defined our W matrix
-            for i in range(0,a):
-                for j in range(0,a):
-                    if ((i!=j) and (i in I_old) and (j in I_old)):
-                        #print("a-b; a: ", self.X_i_bar[i], " b: ", self.X_i_bar[j] - self.W[i][j])
-                        if self.X_i_bar[i] >= self.X_i_bar[j] - self.W[i][j]:
-                            self.check[i][j] = 1
-
-                row_sum = sum(self.check[i])
-                if row_sum == len(I_old) - 1:
-                    #print(i, " added")
-                    I.add(i)
-                # else:
-                #     print(i, "not  added")
-            
-            #print(self.check)
-            #print(I)
-            # if k> 10:
-            #     break
-            if len(I) == 1:
-                print("Got single optimal solution: ")
-                return I
-            else:
-                I_old = I.copy()
-                r += 1
-                #k+= 1
-                for i in range(a):
-                    if i in I_old:
-                        self.sim_vals[i].append(self.custom_H_function(self.sol_space_dict[i]))
-                        self.k -= 1
-                        self.X_i_bar[i]  = (self.X_i_bar[i]*(r-1) + self.sim_vals[i][-1])/r
-                
-
-
-        print("Final set after exhausting budget: ")   
-        return I

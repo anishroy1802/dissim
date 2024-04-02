@@ -17,13 +17,13 @@ def tracing_start():
 
 class KN():
 
-    def __init__(self, domain, step_size, custom_H_function, alpha, delta, n_0= 2, k = 300 ):
+    def __init__(self, domain, step_size, func, alpha, delta, n_0= 2, max_evals= 300 ):
         self.domain = domain
         self.step_size = step_size
-        self.custom_H_function = custom_H_function
+        self.func = func
         self.alpha = alpha
         self.delta = delta
-        self.k = k
+        self.max_evals= max_evals
         self.n_0 = n_0
         self.dimensions = len(self.domain)
         sol_space = []
@@ -54,7 +54,7 @@ class KN():
         #now we have a dict mapping index to an (x,y) pair
         for i in range(len(self.solution_space)):
             for simrep in range(0, self.n_0):
-                self.sim_vals[i][simrep] = self.custom_H_function(self.sol_space_dict[i])
+                self.sim_vals[i][simrep] = self.func(self.sol_space_dict[i])
                 self.X_i_bar_n_0[i] += self.sim_vals[i][simrep]
             
             self.X_i_bar[i] = sum(self.sim_vals[i])
@@ -71,8 +71,8 @@ class KN():
         #print(S_sq)
         return S_sq
         
-    def screening(self):
-        if self.k < 200:
+    def optimize(self):
+        if self.max_evals< 200:
             print("Too small budget")
             return 
 
@@ -81,14 +81,15 @@ class KN():
         a = len(self.solution_space)
         # self.check = np.zeros((a,a))
         I_old = set()
+        #Screening Procedure for Kim-Nelson Algorithm
         for i in range(0, a):
             I_old.add(i)
 
 
         #print(I_old)
-        #k = 0
-        while len(I_old)!=1 and self.k > 0:
-            print("Budget left: ", self.k)
+        #max_evals= 0
+        while len(I_old)!=1 and self.max_evals> 0:
+            print("Budget left: ", self.max_evals)
             #print(self.X_i_bar)
             #print("iteration: ", k)
             print("value of r: ", r)
@@ -131,8 +132,8 @@ class KN():
                 #k+= 1
                 for i in range(a):
                     if i in I_old:
-                        self.sim_vals[i].append(self.custom_H_function(self.sol_space_dict[i]))
-                        self.k -= 1
+                        self.sim_vals[i].append(self.func(self.sol_space_dict[i]))
+                        self.max_evals-= 1
                         self.X_i_bar[i]  = (self.X_i_bar[i]*(r-1) + self.sim_vals[i][-1])/r
                 
 
@@ -142,20 +143,20 @@ class KN():
             
 
 
-def objective_function(x):
-    noise = np.random.normal(scale=0.1)  # Add Gaussian noise with a standard deviation of 0.1
-    return -1*(2*x[0] + x[0]**2 + x[1]**2 + noise) # Minimisation problem hence -1 
+# def objective_function(x):
+#     noise = np.random.normal(scale=0.1)  # Add Gaussian noise with a standard deviation of 0.1
+#     return -1*(2*x[0] + x[0]**2 + x[1]**2 + noise) # Minimisation problem hence -1 
 
-#main()
-dom = [[0,2], [0,2]]
-step_size = [0.5, 0.5]
+# #main()
+# dom = [[0,2], [0,2]]
+# step_size = [0.5, 0.5]
 
-optimizer  = KN(domain = dom, step_size= step_size,
-                         custom_H_function= objective_function,alpha=0.5, delta= 5, n_0  = 2, k = 300)
-a1 = optimizer.screening()
-#print("Solutions:")
-if a1 is not None:
-    for ele in a1:
-        print("Element: ", optimizer.sol_space_dict[ele], "; Objective fn Value: ", -1* optimizer.X_i_bar[ele])
-else:
-    print("No solution")
+# optimizer  = KN(domain = dom, step_size= step_size,
+#                          func= objective_function,alpha=0.5, delta= 5, n_0  = 2, max_evals= 300)
+# a1 = optimizer.optimize()
+# #print("Solutions:")
+# if a1 is not None:
+#     for ele in a1:
+#         print("Element: ", optimizer.sol_space_dict[ele], "; Objective fn Value: ", -1* optimizer.X_i_bar[ele])
+# else:
+#     print("No solution")

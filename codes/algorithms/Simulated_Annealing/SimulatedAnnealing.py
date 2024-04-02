@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import math
 import itertools
 import random
-
+import pandas as pd
 """Memory Tracing:
  The 'tracing_start' function is defined to manage memory tracing. It begins by stopping any ongoing memory tracing using 'tracemalloc.stop()' and checking if tracing is currently active with 'tracemalloc.is_tracing()'. Afterward, it starts memory tracing with 'tracemalloc.start()' and checks the tracing status again. This function is invaluable for profiling memory usage, enabling developers to gain insights into memory allocation and deallocation patterns during code execution. It can help identify potential memory-related issues and optimize memory usage in the application."""
 
@@ -23,22 +23,24 @@ def tracing_start():
     tracemalloc.start()
     print("Tracing Status: ", tracemalloc.is_tracing())
 
+# Implement soln with max_evals as overall simulation budget with a default 5 reps per solution
+#k = simulation budget
 class SA():
 
-    def __init__(self, domain, step_size, T, custom_H_function, nbd_structure, k= 300, percent_reduction=None, initial_solution=None, random_seed=None):
+    def __init__(self, domain, step_size, T, func, neigh_structure = 1, max_evals= 300,  init_solution=None, random_seed=None, percent_reduction=None):
 
         self.domain = domain #n*2 matrix
         self.dimensions = len(self.domain)
         print("Number of dimensions:", self.dimensions)
         self.step_size = step_size #n*1 matrix
         self.T = T
-        self.k = k
-        self.custom_H_function = custom_H_function
-        self.L = [i + 200 for i in range(0, k)]
-        self.initial_solution = initial_solution
+        self.max_evals = max_evals
+        self.func = func
+        # self.L = [i + 200 for i in range(0, k)]
+        self.init_solution = init_solution
         self.random_seed = random_seed
         self.X_opt = []
-        self.nbd_structure = nbd_structure
+        self.neigh_structure = neigh_structure
         self.function_values = []
         self.initial_function_value = None  # Store the initial function value
         self.percent_reduction = percent_reduction
@@ -61,7 +63,7 @@ class SA():
 
     def create_neighborhood(self):
         self.neighborhoods = {}
-        if self.nbd_structure=="N1":
+        if self.neigh_structure==1:
             for element in self.solution_space:
                 N = [el for el in self.solution_space if el != element]
                 self.neighborhoods[element] = N
@@ -101,7 +103,7 @@ class SA():
         self.R_prime = {}
         self.R = {}
 
-        if self.nbd_structure == "N1":
+        if self.neigh_structure == 1:
             for element in self.solution_space:
                 self.R[element] = {}
                 self.R_prime[element] = {}
@@ -141,7 +143,7 @@ class SA():
         # for element in self.solution_space:
         #     if self.neighborhoods[element] is not None:
         #         for neighbor in self.neighborhoods[element]:
-        #             if self.nbd_structure=="N1":
+        #             if self.neigh_structure==1:
         #                 self.R_prime[element][neighbor] = euclidean(element, neighbor)
         #                 self.D[element] += euclidean(element, neighbor)
         #             else:
@@ -154,6 +156,13 @@ class SA():
         # return self.R_prime, self.R
 
     def optimize(self):
+        self.df = pd.DataFrame()
+        self.x_values = []
+        self.fx_values = []
+        if self.max_evals < 200:
+            print("Error: Too less number of replications")
+            return
+
         #self.neighborhoods = self.create_neighborhood()
         self.R_prime, self.R = self.get_transition_matrix()
         
@@ -184,7 +193,7 @@ class SA():
                     self.R_prime_matrix[i][j] = 0
 
         #print(self.R_matrix)
-        if self.initial_solution is None:
+        if self.init_solution is None:
             if self.random_seed is None:
                 random.seed(1234)
             else:
@@ -192,15 +201,17 @@ class SA():
             random_index = random.randint(0, len(self.solution_space) - 1)
             X0 = position_index[random_index]
         else:
-            X0 = self.initial_solution
+            X0 = self.init_solution
         print("initial solution:", X0)
 
         self.V={}
         self.V[X0] = 1
         self.X_opt.append(X0)
+        self.fx_opt = []
 
-        self.function_values.append(self.custom_H_function(list(X0)))
-        for j in range(self.k):
+        self.function_values.append(self.func(list(X0)))
+        j = 0
+        while self.max_evals>0:
             x_j = self.X_opt[j]
             N = self.neighborhoods[x_j]
             transition_probs = self.R_matrix[reverse_mapping[x_j]]
@@ -212,22 +223,29 @@ class SA():
             fx = 0
             fz = 0
 
-            for sim_iter in range(self.L[j]):
-                fx += self.custom_H_function(list(x_j))
-                fz += self.custom_H_function(list(z_j))
+            simreps = min(5, self.max_evals)
+            for sim_iter in range(simreps):
+                fx += self.func(list(x_j))
+                fz += self.func(list(z_j))
 
-            fx = fx / self.L[j]
-            fz = fz / self.L[j]
+            fx = fx / simreps
+            fz = fz / simreps
 
             if j == 0:
-                self.history.append(fx)
+                self.history.append(x_j)
+                self.fx_opt.append(fx)
+                #self.function_values.append(fx)
             G_xz = np.exp(-(fz - fx) / self.T)
             if np.random.rand() <= G_xz:
                 x_next = z_j 
-                self.history.append(fz)
+                fx_next = fz
+                self.history.append(z_j)
+                self.function_values.append(fz)
             else :
                 x_next = x_j
-                self.history.append(fx)
+                fx_next = fx
+                self.history.append(x_j)
+                self.function_values.append(fx)
 
             if x_next not in self.V:
                 self.V[x_next] = 1
@@ -237,61 +255,106 @@ class SA():
             D_x_j = self.D[x_j]
             D_x_next = self.D[x_next]
             x_opt_next = x_next if self.V[x_next] / D_x_next > self.V[x_next] / self.D[x_j] else x_j
+            fx_opt_next = fx_next if self.V[x_next] / D_x_next > self.V[x_next] / self.D[x_j] else fx
             self.X_opt.append(x_opt_next)
+            self.fx_opt.append(fx_opt_next)
 
-            # Calculate and store the function value for this iteration
-            current_function_value = self.custom_H_function(list(x_opt_next))
-            self.function_values.append(current_function_value)
 
-            #if self.percent_reduction is not None:
-            if self.initial_function_value is None:
-                self.initial_function_value = current_function_value
+            self.max_evals = self.max_evals - simreps
+            j = j+1
+
+            # # Calculate and store the function value for this iteration
+            # current_function_value = self.func(list(x_opt_next))
+            # self.function_values.append(current_function_value)
+
+            # #if self.percent_reduction is not None:
+            # if self.initial_function_value is None:
+            #     self.initial_function_value = current_function_value
+            # else:
+            #     if self.percent_reduction is not None:
+            #         if ((self.initial_function_value - current_function_value) >= abs(self.initial_function_value) * (self.percent_reduction/100)):
+            #             print("Stopping criterion of " ,self.percent_reduction,   "% reduction in function value). Stopping optimization.")
+            #             break
+
+            #print(len(self.history), len(self.function_values))
+        starting_value = self.fx_opt[0]
+        decrease_percentages = [(starting_value - fx) / abs(starting_value) * 100 for fx in self.fx_opt]
+        #print(decrease_percentages)
+
+        # Find the index where the decrease exceeds the defined criterion 
+        if self.percent_reduction is not None:
+            criterion = self.percent_reduction
+            end_index = next((i for i, val in enumerate(decrease_percentages) if val >= criterion), None)
+            print("end index:", end_index)
+
+            # Truncate the x_values and fx_values arrays based on the end_index
+            if end_index is not None:
+                x_values = self.X_opt[:end_index+1]
+                fx_values = self.fx_opt[:end_index+1]
             else:
-                if self.percent_reduction is not None:
-                    if ((self.initial_function_value - current_function_value) >= abs(self.initial_function_value) * (self.percent_reduction/100)):
-                        print("Stopping criterion of " ,self.percent_reduction,   "% reduction in function value). Stopping optimization.")
-                        break
+                x_values = self.X_opt
+                fx_values = self.fx_opt
+                
+
+        else:
+            criterion = 0
+            x_values = self.X_opt
+            fx_values = self.fx_opt
+
+        # Create a DataFrame using pandas
+        self.df = pd.DataFrame({'x': x_values, 'f(x)': fx_values})
+        if end_index is not None:
+            self.change = decrease_percentages[end_index]
+        else:
+            self.change = decrease_percentages[-1]
+        self.x_values = x_values
+        self.fx_values = fx_values
+        # Display the DataFrame
+        print(self.df)
+        print("Function completed without termination.")
+
 
         # Plot the function value vs. iteration
         # plt.figure(figsize=(10, 6))
         # plt.plot(range(len(self.function_values)), self.function_values, marker='o', linestyle='-')
         # plt.xlabel('Iteration')
         # plt.ylabel('Function Value')
-        # plt.title('Function Value vs. Iteration; Neighborhood Structure: ' + str(self.nbd_structure))
+        # plt.title('Function Value vs. Iteration; Neighborhood Structure: ' + str(self.neigh_structure))
         # plt.grid(True)
         # plt.show()
 
     def print_function_values(self):
         #print("V matrix:", self.V)
-        print("iters:", len(self.function_values)-1)
+        print("iters:", len(self.df) - 1)
         # result_string = ' '.join(map(str, self.X_opt))
         # print("values: ", result_string)
         #print("VALUES:")
         # print("init:", self.function_values[0])
         # print("final:", self.function_values[-1])
-        print("final optimal value: ", self.X_opt[-1])
-        print("% reduction:",  100*(self.function_values[0] -  self.function_values[-1])/abs(self.function_values[0]))
+        print("final optimal value: ", self.x_values[-1])
+        print("% reduction:", self.change)
         #print(self.function_values)
 
-def objective_function(x):
-    noise = np.random.normal(scale=0.1)  # Add Gaussian noise with a standard deviation of 0.1
-    return 2*x[0] + x[0]**2 + x[1]**2 + noise
+# def objective_function(x):
+#     noise = np.random.normal(scale=0.1)  # Add Gaussian noise with a standard deviation of 0.1
+#     return 2*x[0] + x[0]**2 + x[1]**2 + noise
 
-#main()
-dom = [[0,2], [0,2]]
-step_size = [0.1, 0.2]
-T= 100
-k= 100
+# #main()
+# dom = [[0,2], [0,2]]
+# step_size = [0.1, 0.2]
+# T= 100
+# k= 100
 
 
-optimizer  = SA(domain = dom, step_size= step_size, T = 100, k = 75,
-                         custom_H_function= objective_function, nbd_structure= 'N1', 
-                         random_seed= 42)
-optimizer.optimize()
-optimizer.print_function_values()
 
-optimizer  = SA(domain = dom, step_size= step_size, T = 100, k = 75,
-                         custom_H_function= objective_function, nbd_structure= 'N2', 
-                         random_seed= 42)
-optimizer.optimize()
-optimizer.print_function_values()
+# optimizer  = SA(domain = dom, step_size= step_size, T = 100, max_evals= 1000,
+#                          func= objective_function, neigh_structure= 1, 
+#                          random_seed= 42, percent_reduction= 40)
+# optimizer.optimize()
+# optimizer.print_function_values()
+
+# optimizer  = SA(domain = dom, step_size= step_size, T = 100, max_evals= 75,
+#                          func= objective_function, neigh_structure= '2', 
+#                          random_seed= 42)
+# optimizer.optimize()
+# optimizer.print_function_values()
