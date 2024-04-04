@@ -11,7 +11,8 @@ def func1(x0):
 init = [2,2]
 dom = [[1,7]]*2
 step_size = [0.1,0.25]
-func1AHA = dissim.AHA(func1,dom, step_size= step_size,max_evals= 500, percent_improvement=60, init_solution=[2,2],m = 40)
+func1AHA = dissim.AHA(func1,dom, step_size= step_size,max_evals= 500, 
+                      percent_improvement=60, init_solution=[2,2],m = 40)
 a = func1AHA.optimize()
 
 func1AHA.print_function_values()

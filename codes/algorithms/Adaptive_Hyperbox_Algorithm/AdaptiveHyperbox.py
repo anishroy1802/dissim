@@ -261,7 +261,7 @@ class AHA():
 
     self.df = pd.DataFrame({'x': self.all_x, 'f(x)': self.all_fx})
     print (self.df)
-    print("iters:",len(self.all_x))
+    print("iters:",len(self.all_x)-1)
     print("initial x: ", self.init_solution, "initial fx estimated: ", self.initval)
     print("optimal x* values: ", self.x_star)
     print("optimal f(x*) values: ",self.fx_star)

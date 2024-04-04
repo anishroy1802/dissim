@@ -18,4 +18,3 @@ if a is not None:
 else:
     print("No solution")
 
-print(a[-1])

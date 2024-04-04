@@ -280,12 +280,12 @@ class SA():
         starting_value = self.fx_opt[0]
         decrease_percentages = [(starting_value - fx) / abs(starting_value) * 100 for fx in self.fx_opt]
         #print(decrease_percentages)
-
+        end_index =  -1
         # Find the index where the decrease exceeds the defined criterion 
         if self.percent_reduction is not None:
             criterion = self.percent_reduction
             end_index = next((i for i, val in enumerate(decrease_percentages) if val >= criterion), None)
-            print("end index:", end_index)
+            #print("end index:", end_index)
 
             # Truncate the x_values and fx_values arrays based on the end_index
             if end_index is not None:
@@ -337,26 +337,26 @@ class SA():
         print("% reduction:", self.change)
         #print(self.function_values)
 
-# def objective_function(x):
-#     noise = np.random.normal(scale=0.1)  # Add Gaussian noise with a standard deviation of 0.1
-#     return 2*x[0] + x[0]**2 + x[1]**2 + noise
+def objective_function(x):
+    noise = np.random.normal(scale=0.1)  # Add Gaussian noise with a standard deviation of 0.1
+    return 2*x[0] + x[0]**2 + x[1]**2 + noise
 
-# #main()
-# dom = [[0,2], [0,2]]
-# step_size = [0.1, 0.2]
-# T= 100
-# k= 100
+#main()
+dom = [[0,2], [0,2]]
+step_size = [0.1, 0.2]
+T= 100
+k= 100
 
 
 
-# optimizer  = SA(domain = dom, step_size= step_size, T = 100, max_evals= 1000,
-#                          func= objective_function, neigh_structure= 1, 
-#                          random_seed= 42, percent_reduction= 40)
-# optimizer.optimize()
-# optimizer.print_function_values()
+optimizer  = SA(domain = dom, step_size= step_size, T = 100, max_evals= 1000,
+                         func= objective_function, neigh_structure= 1, 
+                         random_seed= 42, percent_reduction= 40)
+optimizer.optimize()
+optimizer.print_function_values()
 
-# optimizer  = SA(domain = dom, step_size= step_size, T = 100, max_evals= 75,
-#                          func= objective_function, neigh_structure= '2', 
-#                          random_seed= 42)
-# optimizer.optimize()
-# optimizer.print_function_values()
+optimizer  = SA(domain = dom, step_size= step_size, T = 100, max_evals= 275,
+                         func= objective_function, neigh_structure= 2, 
+                         random_seed= 42)
+optimizer.optimize()
+optimizer.print_function_values()

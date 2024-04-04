@@ -9,15 +9,15 @@ def func2(x):
 
 init = [2,2,2,2]
 dom = [[1,7]]*4
-step_size = [0.1,0.25,0.5,0.5]
+step_size = [1,1,1,1]
 optimizer  = dissim.SA(domain = dom, step_size= step_size, T = 100, max_evals= 1000,
                          func= func2, neigh_structure= 1, 
                          random_seed= 42, percent_reduction= 40)
 optimizer.optimize()
 optimizer.print_function_values()
 
-optimizer  = dissim.SA(domain = dom, step_size= step_size, T = 100, max_evals= 75,
-                         func= func2, neigh_structure= '2', 
+optimizer  = dissim.SA(domain = dom, step_size= step_size, T = 100, max_evals= 200,
+                         func= func2, neigh_structure= 2, 
                          random_seed= 42)
 optimizer.optimize()
 optimizer.print_function_values()

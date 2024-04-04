@@ -446,10 +446,11 @@ class SA():
         #print(decrease_percentages)
 
         # Find the index where the decrease exceeds the defined criterion 
+        end_index = -1
         if self.percent_reduction is not None:
             criterion = self.percent_reduction
             end_index = next((i for i, val in enumerate(decrease_percentages) if val >= criterion), None)
-            print("end index:", end_index)
+            #print("end index:", end_index)
 
             # Truncate the x_values and fx_values arrays based on the end_index
             if end_index is not None:
@@ -748,7 +749,7 @@ class AHA():
 
     self.df = pd.DataFrame({'x': self.all_x, 'f(x)': self.all_fx})
     print (self.df)
-    print("iters:",len(self.all_x))
+    print("iters:",len(self.all_x)-1)
     print("initial x: ", self.init_solution, "initial fx estimated: ", self.initval)
     print("optimal x* values: ", self.x_star)
     print("optimal f(x*) values: ",self.fx_star)
