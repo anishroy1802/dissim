@@ -1,28 +1,34 @@
+# Discrete valued function 
+
 import numpy as np
 import dissim as ds
 
-def func2(x):
-  x1,x2,x3,x4 = x['x1'],x['x2'], x['x3'],x['x4']
-  return (x1+10*x2)**2 + 5* (x3-x4)**2 + (x2-2*x3)**4 + 10*(x1-x4)**4 + 1 +np.random.normal(0,0.5)
+def ex3(x):
+    if x["x"] == 1:
+        f = 0.3
+    elif x["x"] == 2:
+        f = 0.7
+    elif x["x"] == 3:
+        f = 0.9
+    elif x["x"] == 4:
+        f = 0.5
+    elif x["x"] == 5:
+        f = 1
+    elif x["x"] == 6:
+        f = 1.4
+    elif x["x"] == 7:
+        f = 0.7
+    elif x["x"] == 8:
+        f = 0.8
+    elif x["x"] == 9:
+        f = 0
+    elif x["x"] == 10:
+        f = 0.6
+    return f + np.random.uniform(-0.5, 0.5)
 
-dom3 = {'x1':[i for i in range(20)],'x2':[i for i in range(20)],'x3':
-       [i for i in range(20)],'x4':[i for i in range(20)]}
-sr_userDef3 = ds.stochastic_ruler(space = dom3, maxevals = 100, prob_type = 'opt_sol', func = func2, percentReduction = 50, neigh_structure=2)
-print(sr_userDef3.optsol())
-# sr_userDef3.plot_minh_of_z()
 
+dom2 = {"x": [i for i in range(1, 11)]}
 
-# def func(x0):
-#     x1, x2 = x0["x1"], x0["x2"]
-
-#     def multinodal(x):
-#         return (np.sin(0.05 * np.pi * x) ** 6) / 2 ** (2 * ((x - 10) / 80) ** 2)
-
-#     return -(multinodal(x1) + multinodal(x2)) + np.random.normal(0, 0.3)
-
-
-# dom = {"x1": [i for i in range(101)], "x2": [i for i in range(101)]}
-
-# sr_userDef = stochastic_ruler(space=dom, maxevals=10, prob_type="opt_sol", func=func, neigh_structure=1)
-# print(sr_userDef.optsol())
-# #sr_userDef.plot_minh_of_z()
+sr_userdef2 = ds.stochastic_ruler(space=dom2, max_evals=300, prob_type="opt_sol", func=ex3, percentReduction=80, neigh_structure = 2 )
+print(sr_userdef2.optsol())
+# sr_userdef2.plot_minh_of_z()

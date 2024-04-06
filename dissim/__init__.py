@@ -860,7 +860,7 @@ class stochastic_ruler:
 
     def __init__( self, space: dict, max_evals: int = 300, prob_type="opt_sol", func=None, 
         percent_improvement: int = None, init_solution: dict = None, lower_bound: int = None, 
-        upper_bound: int = None, neigh_structure : int = 1, print_solutions: bool = False):
+        upper_bound: int = None, neigh_structure : int = 2, print_solutions: bool = False):
         """The constructor for declaring the instance variables in the Stochastic Ruler Random Search Method
 
         Args:
@@ -1013,7 +1013,7 @@ class stochastic_ruler:
             int: the maximum number for the number of iterations
         """
 
-        return int(math.log(k + 10, math.e) / math.log(5, math.e))
+        return int(math.log(k + 10, math.e) / math.log(5, math.e)) 
 
 
     
@@ -1047,11 +1047,14 @@ class stochastic_ruler:
 
             if self.init_solution is None:
                 for i in self.space:
-                    initial_choice_HP[i] = self.space[i][0]
+                    # initial_choice_HP[i] = self.space[i][0]
+                    initial_choice_HP[i] = random.choice(self.space[i])
+                print("initial solution = ",initial_choice_HP)
             else:
                 initial_choice_HP = self.init_solution
 
             # printing initial value for checking
+            # init_value = self.run(initial_choice_HP, initial_choice_HP, X, y)
             init_value = self.func(initial_choice_HP)
             print("Initial value = ", init_value)
 
@@ -1060,7 +1063,7 @@ class stochastic_ruler:
             print("------")
 
             # step 0: Select a starting point x0 in S and let k = 0
-            k = 1
+            k = 0
             x_k = initial_choice_HP
             opt_x = x_k
             a, b = self.det_a_b(self.space, self.max_evals // 10, X, y)
@@ -1070,7 +1073,7 @@ class stochastic_ruler:
             # step 0 ends here
             # print("total evals: ", self.no_of_solutions_visited(self.max_evals))
             while k < self.no_of_solutions_visited(self.max_evals) + 1:
-
+                
                 # step 1:  Given xk = x, choose a candidate zk from N(x)
                 if self.neigh_structure == 1:
                     zk = self.next_solution_based_on_distance(x_k)                  #N1
@@ -1088,7 +1091,7 @@ class stochastic_ruler:
                     # print("value at iter: ", h_of_z)
 
                     if self.print_solutions:
-                        print("k: " , k, "x_k: ", x_k, "f(x_k): ", h_of_z )
+                        print("k: " , k, "x_k: ", x_k, "f(x_k): ", h_of_z )   #the opt_x will be x_k or z_k??
                     
 
                     if h_of_z <= self.target_value :
@@ -1097,25 +1100,27 @@ class stochastic_ruler:
                         print("Stopping criterion of ", self.percent_improvement,"% reduction in function value. Stopping optimization.")
                         # return h_of_z, opt_x, a, b, minh_of_z_tracker
                         self.minh_of_z_tracker.append(h_of_z)
-                        print(self.minh_of_z_tracker)
+                        # print(self.minh_of_z_tracker)
                         return h_of_z, opt_x, a, b
 
                     u = np.random.uniform(a, b)  # Then draw a sample u from U(a, b)
 
                     if h_of_z > u:  # If h(z) > u, then let xk+1 = xk and go to step 3.
-                        k += 1
-                        if h_of_z < minh_of_z:
+                        # k += 1
+                        if h_of_z < minh_of_z:          # not a part of SR, comment for now. 
                             minh_of_z = h_of_z
                             opt_x = x_k
+                        k+=1 
                         break
                     # Otherwise draw another sample h(z) from H(z) and draw another sample u from U(a, b), part of the loop where iter = self.Mf(k) tells the maximum number of failures allowed
                     if h_of_z <= u:  # If all Mk tests have failed
                         x_k = zk
-                        k += 1
+                        # k += 1
                         if h_of_z < minh_of_z:
                             minh_of_z = h_of_z
                             self.minh_of_z_tracker.append(h_of_z)
                             opt_x = zk
+                        k+=1 
                     
                 # step 2 ends here
                 # step 3: k = k+1
@@ -1129,26 +1134,27 @@ class stochastic_ruler:
 
             if self.init_solution is None:
                 for i in self.space:
-                    initial_choice_HP[i] = self.space[i][0]
+                    # initial_choice_HP[i] = self.space[i][0]
+                    initial_choice_HP[i] = random.choice(self.space[i])
+                print("initial solution = ",initial_choice_HP)
             else:
                 initial_choice_HP = self.init_solution
 
             # printing initial value for checking
             init_value = self.func(initial_choice_HP)
-            print("initial_value: ", init_value)
+            # init_value = self.run(initial_choice_HP, initial_choice_HP, X, y)
+            # print("initial_value: ", init_value)
 
             # step 0: Select a starting point x0 in S and let k = 0
-            k = 1
+            k = 0
             x_k = initial_choice_HP
             opt_x = x_k
             a, b = self.det_a_b(self.space, self.max_evals // 10, X, y)
-            # a = -2
-            # b= 1
-            # print(a,b)
+
             minh_of_z = b
             # step 0 ends here
             while k < self.no_of_solutions_visited(self.max_evals) + 1:
-                
+
                 # step 1:  Given xk = x, choose a candidate zk from N(x)
 
                 if self.neigh_structure == 1:
@@ -1156,8 +1162,8 @@ class stochastic_ruler:
                 
                 elif self.neigh_structure == 2:
                     zk = self.random_pick_from_neighbourhood_structure(x_k)         #N2
-
                 # step 1 ends here
+                    
                 # step 2: Given zk = z, draw a sample h(z) from H(z)
                 iter = self.Mf(k)
                 for i in range(iter):
@@ -1171,22 +1177,23 @@ class stochastic_ruler:
                     u = np.random.uniform(a, b)  # Then draw a sample u from U(a, b)
 
                     if h_of_z > u:  # If h(z) > u, then let xk+1 = xk and go to step 3.
-                        k += 1
                         if h_of_z < minh_of_z:
                             minh_of_z = h_of_z
                             opt_x = x_k
+                        k += 1
                         break
                     # Otherwise draw another sample h(z) from H(z) and draw another sample u from U(a, b), part of the loop where iter = self.Mf(k) tells the maximum number of failures allowed
+
                     if h_of_z < u:  # If all Mk tests have failed
                         x_k = zk
-                        k += 1
                         if h_of_z < minh_of_z:
                             minh_of_z = h_of_z
                             self.minh_of_z_tracker.append(minh_of_z)
                             opt_x = zk
-
+                        k += 1
                 # step 2 ends here
                 # step 3: k = k+1
+
 
             # return minh_of_z, opt_x, a, b, minh_of_z_tracker
             return minh_of_z, opt_x, a, b
@@ -1221,7 +1228,5 @@ class stochastic_ruler:
 
         if self.prob_type == "opt_sol":
             funcval = self.func(opt_x)
-
-            # print(funcval,opt_x)
             return funcval
         # print("acc" + str(acc))
