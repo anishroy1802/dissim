@@ -209,7 +209,7 @@ Simulated Anealing Algorithm
 """
 class SA():
 
-    def __init__(self, domain, step_size, T, func, neigh_structure = 1, max_evals= 300,  print_solutions = True, init_solution=None, random_seed=None, percent_reduction=None):
+    def __init__(self, domain, step_size, T, func, neigh_structure = 1, max_evals= 300,  print_solutions = True, init_solution=None, random_seed=None, percent_improvement=None):
 
         self.domain = domain #n*2 matrix
         self.dimensions = len(self.domain)
@@ -222,12 +222,12 @@ class SA():
         self.init_solution = init_solution
         self.random_seed = random_seed
         self.X_opt = []
+        self.fx_opt = []
         self.neigh_structure = neigh_structure
         self.function_values = []
         self.initial_function_value = None  # Store the initial function value
-        self.percent_reduction = percent_reduction
+        self.percent_improvement = percent_improvement
         self.max_euclidean_value = math.sqrt(sum(element[1]**2 - element[0]**2 for element in self.domain))
-        self.history = []
         self.print_solutions = print_solutions
 
         n =  self.dimensions
@@ -311,37 +311,16 @@ class SA():
 
         #print(self.R)
         return self.R_prime, self.R
-        # self.neighborhoods = self.create_neighborhood()
-        # self.D = {}
-        # self.R_prime = {}
-        # self.R = {}
-        # """
-        # initialize R matrix and R_prime matrix as a dictionary to store values of R(x, x') 
-        # for x' being a neighbour of x and vice versa
-        # """
-        # for element in self.solution_space:
-        #     self.R[element] = {}
-        #     self.R_prime[element] = {}
-        
-        # for element in self.solution_space:
-        #     if self.neighborhoods[element] is not None:
-        #         for neighbor in self.neighborhoods[element]:
-        #             if self.neigh_structure==1:
-        #                 self.R_prime[element][neighbor] = euclidean(element, neighbor)
-        #                 self.D[element] += euclidean(element, neighbor)
-        #             else:
-        #                 self.R_prime[element][neighbor] = 1
-        #                 self.D[element] += 1
-        
-        # for element in self.solution_space:
-        #     self.R[element][neighbor] = self.R_prime[element][neighbor]/self.D[element]
-
-        # return self.R_prime, self.R
-
+    
     def optimize(self):
+        self.visits = []
+        self.visits_opt = []
         self.df = pd.DataFrame()
         self.x_values = []
         self.fx_values = []
+        self.z_values = []
+        self.fz_values = []
+        self.flag = -1
         if self.max_evals < 200:
             print("Error: Too less number of replications")
             return
@@ -390,21 +369,32 @@ class SA():
 
         self.V={}
         self.V[X0] = 1
-        self.X_opt.append(X0)
-        self.fx_opt = []
 
-        self.function_values.append(self.func(list(X0)))
         j = 0
         reps = []
         rep_value = 3
-        self.starting_value = 0
+        self.decrease = -math.inf
+        self.change = -math.inf
+        starting_value = 0
         for i in range(0, rep_value):
-            self.starting_value+= self.func(X0)
-        self.starting_value = self.starting_value/rep_value
+            starting_value+= self.func(X0)
+        starting_value = starting_value/rep_value
+        self.min_fx = starting_value
+        x_next = X0
+
+        self.x_values.append(X0)
+        self.fx_values.append(starting_value)
+        self.visits.append(self.V[X0])
+
+        self.X_opt.append(X0)
+        self.fx_opt.append(starting_value)
+        self.visits_opt.append(self.V[X0])
+
         reps.append(rep_value)
+
         while self.max_evals>0:
             rep_value = rep_value + 1
-            x_j = self.X_opt[j]
+            x_j = x_next
             N = self.neighborhoods[x_j]
             transition_probs = self.R_matrix[reverse_mapping[x_j]]
             transition_probs /= np.sum(transition_probs)
@@ -414,7 +404,8 @@ class SA():
 
             fx = 0
             fz = 0
-
+            self.x_values.append(x_j)
+            self.z_values.append(z_j)
             simreps = min(rep_value, self.max_evals)
             for sim_iter in range(simreps):
                 fx += self.func(list(x_j))
@@ -423,141 +414,80 @@ class SA():
             fx = fx / simreps
             fz = fz / simreps
 
-            if j == 0:
-                self.history.append(x_j)
-                self.fx_opt.append(fx)
-                #self.function_values.append(fx)
+            self.fx_values.append(fx)
+            self.fz_values.append(fz)
+            # if j == 0:
+            #     self.history.append(x_j)
+            #     self.fx_opt.append(fx)
+            #     #self.function_values.append(fx)
             G_xz = np.exp(-(fz - fx) / self.T)
             if np.random.rand() <= G_xz:
                 x_next = z_j 
                 fx_next = fz
-                self.history.append(z_j)
-                self.function_values.append(fz)
             else :
                 x_next = x_j
                 fx_next = fx
-                self.history.append(x_j)
-                self.function_values.append(fx)
 
             if x_next not in self.V:
                 self.V[x_next] = 1
             else:
-                self.V[x_next] += 1
+                self.V[x_next] = self.V[x_next] + 1
 
-            D_x_j = self.D[x_j]
-            D_x_next = self.D[x_next]
-            x_opt_next = x_next if self.V[x_next] / D_x_next > self.V[x_next] / self.D[x_j] else x_j
-            fx_opt_next = fx_next if self.V[x_next] / D_x_next > self.V[x_next] / self.D[x_j] else fx
-            self.X_opt.append(x_opt_next)
-            self.fx_opt.append(fx_opt_next)
+            self.visits.append(self.V[x_next])
 
-
+            x_opt_next = x_next if self.V[x_next] / self.D[x_next] > self.V[x_next] / self.D[x_j] else x_j
+            fx_opt_next = fx_next if self.V[x_next] / self.D[x_next] > self.V[x_next] / self.D[x_j] else fx
+            #print(x_j, z_j, x_next, x_opt_next)
             self.max_evals = self.max_evals - simreps
             j = j+1
             reps.append(simreps)
 
-            # # Calculate and store the function value for this iteration
-            # current_function_value = self.func(list(x_opt_next))
-            # self.function_values.append(current_function_value)
+            self.X_opt.append(x_opt_next)
+            self.fx_opt.append(fx_opt_next)
+            self.decrease = ((starting_value - self.fx_opt[-1])/ abs(starting_value))*100
+            if self.percent_improvement is not None:
+                if self.decrease >= self.percent_improvement:
+                    print("Stopping criterion met (% reduction in function value). Stopping optimization.")
+                    self.flag = 1
+                    self.x_values.append(x_opt_next)
+                    self.fx_values.append(fx_opt_next)
+                    self.visits.append(self.V[x_opt_next])
+                    break
+            self.change = max(self.change, self.decrease)
 
-            # #if self.percent_reduction is not None:
-            # if self.initial_function_value is None:
-            #     self.initial_function_value = current_function_value
-            # else:
-            #     if self.percent_reduction is not None:
-            #         if ((self.initial_function_value - current_function_value) >= abs(self.initial_function_value) * (self.percent_reduction/100)):
-            #             print("Stopping criterion of " ,self.percent_reduction,   "% reduction in function value). Stopping optimization.")
-            #             break
-
-            #print(len(self.history), len(self.function_values))
-        #self.starting_value = self.fx_opt[0]
-        print("Starting value: " ,self.starting_value)
-        if self.percent_reduction is not None:
-            print("Target value: ", self.starting_value*(100 - self.percent_reduction)/100)
+        print("Budget exhausted. Stopping optimization.")
+        if self.flag == -1:
+            self.x_values.append(x_opt_next)
+            self.fx_values.append(fx_opt_next)
+            self.visits.append(self.V[x_opt_next])
+        self.min_fx = min(self.fx_opt)
+        min_index = self.fx_opt.index(self.min_fx)
+        self.corresponding_x_value = self.X_opt[min_index]
+        print("Starting value: " , starting_value)
+        if self.percent_improvement is not None:
+            print("Target value: ", starting_value*(100 - self.percent_improvement)/100)
         else:
             print("No target value")
-        decrease_percentages = [(self.starting_value - fx) / abs(self.starting_value) * 100 for fx in self.fx_opt]
-        #print(decrease_percentages)
-        end_index =  -1
-        # Find the index where the decrease exceeds the defined criterion 
-        if self.percent_reduction is not None:
-            criterion = self.percent_reduction
-            end_index = next((i for i, val in enumerate(decrease_percentages) if val >= criterion), -1)
-            #print("end index:", end_index)
 
-            # Truncate the x_values and fx_values arrays based on the end_index
-            if end_index is not None:
-                x_values = self.X_opt[0:end_index+1]
-                fx_values = self.fx_opt[0:end_index+1]
-                reps = reps[0: end_index+1]
-            else:
-                x_values = self.X_opt[0:]
-                fx_values = self.fx_opt[0:]
-                reps = reps[0:]
-                
-
-        else:
-            criterion = 0
-            x_values = self.X_opt[0:]
-            fx_values = self.fx_opt[0:]
-            reps = reps[0:]
-
-        # Create a DataFrame using pandas
-        self.flag = 0
-        self.df = pd.DataFrame({'x*': x_values, 'f(x*)': fx_values, 'reps used': reps})
-        if end_index != -1:
-            print("Stopping criterion met (% reduction in function value). Stopping optimization.")
-            self.flag = 1
-            self.change = decrease_percentages[end_index]
-        else:
-            print("Budget exhausted. Stopping optimization.")
-            self.change = max(decrease_percentages)
-        self.x_values = x_values
-        self.fx_values = fx_values
-        # Display the DataFrame
-        if self.print_solutions:
-            if len(self.df)!= 0:
-                print(self.df)
-            else:
-                print("No solutions")
-        #print("Function completed without termination.")
-
-
-        # Plot the function value vs. iteration
-        # plt.figure(figsize=(10, 6))
-        # plt.plot(range(len(self.function_values)), self.function_values, marker='o', linestyle='-')
-        # plt.xlabel('Iteration')
-        # plt.ylabel('Function Value')
-        # plt.title('Function Value vs. Iteration; Neighborhood Structure: ' + str(self.neigh_structure))
-        # plt.grid(True)
-        # plt.show()
-
+        self.visited_df = pd.DataFrame({'x': self.x_values, 'f(x)': self.fx_values, 'visits made': self.visits})
+        self.df = pd.DataFrame({'x*': self.X_opt, 'f(x*)': self.fx_opt, 'reps used': reps})
+        
     def print_function_values(self):
-        #print("V matrix:", self.V)
-        if len(self.df) > 0:
-            print("iters:", len(self.df)-1)
-        else:
-            print("No sol")
-        # result_string = ' '.join(map(str, self.X_opt))
-        # print("values: ", result_string)
-        #print("VALUES:")
-        # print("init:", self.function_values[0])
-        # print("final:", self.function_values[-1])
+        if self.print_solutions:
+            print("Progress of Algorithm:")
+            print(self.visited_df)
+            print("Optimal values:")
+            print(self.df)
+
         if self.flag == 1:
-            print("final optimal value: ", self.x_values[-1], "final obj fn value: ",self.fx_values[-1])
+            print("final optimal value: ", self.X_opt[-1], "final obj fn value: ",self.fx_values[-1])
+            print("% reduction:", self.decrease)
         else:
-            if len(self.x_values)!=0:
-                min_value = min(self.fx_values)
-                min_index = self.fx_values.index(min_value)
-                corresponding_x_value = self.x_values[min_index]
-                print("final optimal value: ", corresponding_x_value, "final obj fn value: ", min_value)
-                print("% reduction:", self.change)
-            else:
-                min_value = self.starting_value
-                corresponding_x_value = self.init_solution
-                print("final optimal value: ", corresponding_x_value, "final obj fn value: ", min_value)
-                print("% reduction:", 0.00)
-        #print(self.function_values)
+            print("final optimal value: ", self.corresponding_x_value, "final obj fn value: ",self.min_fx)
+            if self.init_solution == self.corresponding_x_value:
+                self.change = 0.00
+                print("No better solution found.")
+            print("% reduction:", self.change)
 
 """
 Adaptive Hyperbox Algorithm

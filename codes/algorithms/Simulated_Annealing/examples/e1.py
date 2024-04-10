@@ -24,7 +24,7 @@ T= 100
 
 optimizer  = dissim.SA(domain = dom, step_size= step_size, T = 100, max_evals= 1000,
                          func= func1, neigh_structure= 1, 
-                         random_seed= 42, percent_reduction= 40)
+                         random_seed= 42, percent_improvement= 40)
 optimizer.optimize()
 optimizer.print_function_values()
 
