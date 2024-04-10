@@ -19,7 +19,7 @@ def tracing_mem():
     print("Peak Size in MB - ", peak)
 
 class AHA():
-  def __init__(self,func,domain, step_size, max_evals, init_solution, m, random_seed  = None, percent_improvement = None):
+  def __init__(self,func,domain, step_size, max_evals, init_solution, m, random_seed  = None, percent_improvement = None, print_solutions = True):
     """Constructor method that initializes the instance variables of the class AHA
 
     Args:
@@ -36,6 +36,7 @@ class AHA():
     self.m = m
     # self.initial_choice = initial_choice
     self.x_star = []
+    self.print_solutions = print_solutions
     #self.initial_choice = self.sample(domain)
     sol_space = []
     self.dimensions  = len(self.step_size)
@@ -260,7 +261,8 @@ class AHA():
   def print_function_values(self):
 
     self.df = pd.DataFrame({'x': self.all_x, 'f(x)': self.all_fx})
-    print (self.df)
+    if self.print_solutions:
+      print (self.df)
     print("iters:",len(self.all_x)-1)
     print("initial x: ", self.init_solution, "initial fx estimated: ", self.initval)
     print("optimal x* values: ", self.x_star)

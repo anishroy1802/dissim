@@ -17,7 +17,7 @@ def tracing_start():
 
 class KN():
 
-    def __init__(self, domain, step_size, func, alpha, delta, n_0= 2, max_evals= 300 ):
+    def __init__(self, domain, step_size, func, alpha, delta, n_0= 2, max_evals= 300, print_solutions = True):
         self.domain = domain
         self.step_size = step_size
         self.func = func
@@ -27,6 +27,7 @@ class KN():
         self.n_0 = n_0
         self.dimensions = len(self.domain)
         sol_space = []
+        self.print_solutions = print_solutions
         for i in range(self.dimensions):
             sol_space.append(np.arange(self.domain[i][0], self.domain[i][1]+ step_size[i], step_size[i]))
         
@@ -72,6 +73,8 @@ class KN():
         return S_sq
         
     def optimize(self):
+        fx_values = []
+        x_values = []
         if self.max_evals< 200:
             print("Too small budget")
             return 
@@ -125,6 +128,12 @@ class KN():
             #     break
             if len(I) == 1:
                 print("Got single optimal solution: ")
+                for ele in I:
+                    x_values.append(self.sol_space_dict[ele])
+                    fx_values.append(self.X_i_bar[ele])
+                self.df = pd.DataFrame({'x*': x_values, 'f(x*)': fx_values})
+                if self.print_solutions:
+                    print(self.df)
                 return I
             else:
                 I_old = I.copy()
@@ -139,21 +148,30 @@ class KN():
 
 
         print("Final set after exhausting budget: ")   
+
+        if I is not None:
+            for ele in I:
+                x_values.append(self.sol_space_dict[ele])
+                fx_values.append(self.X_i_bar[ele])
+            self.df = pd.DataFrame({'x*': x_values, 'f(x*)': fx_values})
+
+            if self.print_solutions:
+                print(self.df)
         return I
             
 
 
-# def objective_function(x):
-#     noise = np.random.normal(scale=0.1)  # Add Gaussian noise with a standard deviation of 0.1
-#     return -1*(2*x[0] + x[0]**2 + x[1]**2 + noise) # Minimisation problem hence -1 
+def objective_function(x):
+    noise = np.random.normal(scale=0.1)  # Add Gaussian noise with a standard deviation of 0.1
+    return -1*(2*x[0] + x[0]**2 + x[1]**2 + noise) # Minimisation problem hence -1 
 
-# #main()
-# dom = [[0,2], [0,2]]
-# step_size = [0.5, 0.5]
+#main()
+dom = [[0,2], [0,2]]
+step_size = [0.5, 0.5]
 
-# optimizer  = KN(domain = dom, step_size= step_size,
-#                          func= objective_function,alpha=0.5, delta= 5, n_0  = 2, max_evals= 300)
-# a1 = optimizer.optimize()
+optimizer  = KN(domain = dom, step_size= step_size,
+                         func= objective_function,alpha=0.5, delta= 5, n_0  = 2, max_evals= 300)
+a1 = optimizer.optimize()
 # #print("Solutions:")
 # if a1 is not None:
 #     for ele in a1:

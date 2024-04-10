@@ -7,7 +7,7 @@ def func2(x):
 
 dom3 = {'x1':[i for i in range(20)],'x2':[i for i in range(20)],'x3':
        [i for i in range(20)],'x4':[i for i in range(20)]}
-sr_userDef3 = ds.stochastic_ruler(space = dom3, max_evals = 100, prob_type = 'opt_sol', func = func2, percentReduction = 50, neigh_structure=2)
+sr_userDef3 = ds.stochastic_ruler(space = dom3, max_evals = 100, prob_type = 'opt_sol', func = func2, percent_improvement = 50, neigh_structure=2)
 print(sr_userDef3.optsol())
 # sr_userDef3.plot_minh_of_z()
 

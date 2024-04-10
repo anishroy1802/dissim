@@ -62,7 +62,7 @@ Kin Nelson Algorithm
 
 class KN():
 
-    def __init__(self, domain, step_size, func, alpha, delta, n_0= 2, max_evals= 300 ):
+    def __init__(self, domain, step_size, func, alpha, delta, n_0= 2, max_evals= 300, print_solutions = True):
         self.domain = domain
         self.step_size = step_size
         self.func = func
@@ -72,6 +72,7 @@ class KN():
         self.n_0 = n_0
         self.dimensions = len(self.domain)
         sol_space = []
+        self.print_solutions = print_solutions
         for i in range(self.dimensions):
             sol_space.append(np.arange(self.domain[i][0], self.domain[i][1]+ step_size[i], step_size[i]))
         
@@ -117,6 +118,8 @@ class KN():
         return S_sq
         
     def optimize(self):
+        fx_values = []
+        x_values = []
         if self.max_evals< 200:
             print("Too small budget")
             return 
@@ -170,6 +173,12 @@ class KN():
             #     break
             if len(I) == 1:
                 print("Got single optimal solution: ")
+                for ele in I:
+                    x_values.append(self.sol_space_dict[ele])
+                    fx_values.append(self.X_i_bar[ele])
+                self.df = pd.DataFrame({'x*': x_values, 'f(x*)': fx_values})
+                if self.print_solutions:
+                    print(self.df)
                 return I
             else:
                 I_old = I.copy()
@@ -184,6 +193,15 @@ class KN():
 
 
         print("Final set after exhausting budget: ")   
+
+        if I is not None:
+            for ele in I:
+                x_values.append(self.sol_space_dict[ele])
+                fx_values.append(self.X_i_bar[ele])
+            self.df = pd.DataFrame({'x*': x_values, 'f(x*)': fx_values})
+
+            if self.print_solutions:
+                print(self.df)
         return I
 
 """
@@ -191,7 +209,7 @@ Simulated Anealing Algorithm
 """
 class SA():
 
-    def __init__(self, domain, step_size, T, func, neigh_structure = 1, max_evals= 300,  init_solution=None, random_seed=None, percent_reduction=None):
+    def __init__(self, domain, step_size, T, func, neigh_structure = 1, max_evals= 300,  print_solutions = True, init_solution=None, random_seed=None, percent_reduction=None):
 
         self.domain = domain #n*2 matrix
         self.dimensions = len(self.domain)
@@ -210,6 +228,7 @@ class SA():
         self.percent_reduction = percent_reduction
         self.max_euclidean_value = math.sqrt(sum(element[1]**2 - element[0]**2 for element in self.domain))
         self.history = []
+        self.print_solutions = print_solutions
 
         n =  self.dimensions
         # Calculate the number of values (M) within each dimension
@@ -364,6 +383,7 @@ class SA():
                 random.seed(self.random_seed)
             random_index = random.randint(0, len(self.solution_space) - 1)
             X0 = position_index[random_index]
+            self.init_solution = X0
         else:
             X0 = self.init_solution
         print("initial solution:", X0)
@@ -375,7 +395,15 @@ class SA():
 
         self.function_values.append(self.func(list(X0)))
         j = 0
+        reps = []
+        rep_value = 3
+        self.starting_value = 0
+        for i in range(0, rep_value):
+            self.starting_value+= self.func(X0)
+        self.starting_value = self.starting_value/rep_value
+        reps.append(rep_value)
         while self.max_evals>0:
+            rep_value = rep_value + 1
             x_j = self.X_opt[j]
             N = self.neighborhoods[x_j]
             transition_probs = self.R_matrix[reverse_mapping[x_j]]
@@ -387,7 +415,7 @@ class SA():
             fx = 0
             fz = 0
 
-            simreps = min(5, self.max_evals)
+            simreps = min(rep_value, self.max_evals)
             for sim_iter in range(simreps):
                 fx += self.func(list(x_j))
                 fz += self.func(list(z_j))
@@ -426,6 +454,7 @@ class SA():
 
             self.max_evals = self.max_evals - simreps
             j = j+1
+            reps.append(simreps)
 
             # # Calculate and store the function value for this iteration
             # current_function_value = self.func(list(x_opt_next))
@@ -441,43 +470,56 @@ class SA():
             #             break
 
             #print(len(self.history), len(self.function_values))
-        starting_value = self.fx_opt[0]
-        decrease_percentages = [(starting_value - fx) / abs(starting_value) * 100 for fx in self.fx_opt]
+        #self.starting_value = self.fx_opt[0]
+        print("Starting value: " ,self.starting_value)
+        if self.percent_reduction is not None:
+            print("Target value: ", self.starting_value*(100 - self.percent_reduction)/100)
+        else:
+            print("No target value")
+        decrease_percentages = [(self.starting_value - fx) / abs(self.starting_value) * 100 for fx in self.fx_opt]
         #print(decrease_percentages)
-
+        end_index =  -1
         # Find the index where the decrease exceeds the defined criterion 
-        end_index = -1
         if self.percent_reduction is not None:
             criterion = self.percent_reduction
-            end_index = next((i for i, val in enumerate(decrease_percentages) if val >= criterion), None)
+            end_index = next((i for i, val in enumerate(decrease_percentages) if val >= criterion), -1)
             #print("end index:", end_index)
 
             # Truncate the x_values and fx_values arrays based on the end_index
             if end_index is not None:
-                x_values = self.X_opt[:end_index+1]
-                fx_values = self.fx_opt[:end_index+1]
+                x_values = self.X_opt[0:end_index+1]
+                fx_values = self.fx_opt[0:end_index+1]
+                reps = reps[0: end_index+1]
             else:
-                x_values = self.X_opt
-                fx_values = self.fx_opt
+                x_values = self.X_opt[0:]
+                fx_values = self.fx_opt[0:]
+                reps = reps[0:]
                 
 
         else:
             criterion = 0
-            x_values = self.X_opt
-            fx_values = self.fx_opt
+            x_values = self.X_opt[0:]
+            fx_values = self.fx_opt[0:]
+            reps = reps[0:]
 
         # Create a DataFrame using pandas
-        self.df = pd.DataFrame({'x': x_values, 'f(x)': fx_values})
-        if end_index is not None:
+        self.flag = 0
+        self.df = pd.DataFrame({'x*': x_values, 'f(x*)': fx_values, 'reps used': reps})
+        if end_index != -1:
             print("Stopping criterion met (% reduction in function value). Stopping optimization.")
+            self.flag = 1
             self.change = decrease_percentages[end_index]
         else:
             print("Budget exhausted. Stopping optimization.")
-            self.change = decrease_percentages[-1]
+            self.change = max(decrease_percentages)
         self.x_values = x_values
         self.fx_values = fx_values
         # Display the DataFrame
-        print(self.df)
+        if self.print_solutions:
+            if len(self.df)!= 0:
+                print(self.df)
+            else:
+                print("No solutions")
         #print("Function completed without termination.")
 
 
@@ -492,14 +534,29 @@ class SA():
 
     def print_function_values(self):
         #print("V matrix:", self.V)
-        print("iters:", len(self.df) - 1)
+        if len(self.df) > 0:
+            print("iters:", len(self.df)-1)
+        else:
+            print("No sol")
         # result_string = ' '.join(map(str, self.X_opt))
         # print("values: ", result_string)
         #print("VALUES:")
         # print("init:", self.function_values[0])
         # print("final:", self.function_values[-1])
-        print("final optimal value: ", self.x_values[-1])
-        print("% reduction:", self.change)
+        if self.flag == 1:
+            print("final optimal value: ", self.x_values[-1], "final obj fn value: ",self.fx_values[-1])
+        else:
+            if len(self.x_values)!=0:
+                min_value = min(self.fx_values)
+                min_index = self.fx_values.index(min_value)
+                corresponding_x_value = self.x_values[min_index]
+                print("final optimal value: ", corresponding_x_value, "final obj fn value: ", min_value)
+                print("% reduction:", self.change)
+            else:
+                min_value = self.starting_value
+                corresponding_x_value = self.init_solution
+                print("final optimal value: ", corresponding_x_value, "final obj fn value: ", min_value)
+                print("% reduction:", 0.00)
         #print(self.function_values)
 
 """
@@ -507,7 +564,7 @@ Adaptive Hyperbox Algorithm
 """
 
 class AHA():
-  def __init__(self,func,domain, step_size, max_evals, init_solution, m, random_seed  = None, percent_improvement = None):
+  def __init__(self,func,domain, step_size, max_evals, init_solution, m, random_seed  = None, percent_improvement = None, print_solutions = True):
     """Constructor method that initializes the instance variables of the class AHA
 
     Args:
@@ -524,6 +581,7 @@ class AHA():
     self.m = m
     # self.initial_choice = initial_choice
     self.x_star = []
+    self.print_solutions = print_solutions
     #self.initial_choice = self.sample(domain)
     sol_space = []
     self.dimensions  = len(self.step_size)
@@ -748,7 +806,8 @@ class AHA():
   def print_function_values(self):
 
     self.df = pd.DataFrame({'x': self.all_x, 'f(x)': self.all_fx})
-    print (self.df)
+    if self.print_solutions:
+      print (self.df)
     print("iters:",len(self.all_x)-1)
     print("initial x: ", self.init_solution, "initial fx estimated: ", self.initval)
     print("optimal x* values: ", self.x_star)
