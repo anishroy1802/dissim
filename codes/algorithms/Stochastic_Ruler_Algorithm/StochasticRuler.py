@@ -102,23 +102,23 @@ class stochastic_ruler:
         return dict(zip(initial_solution.keys(), chosen_combination))
 
 
-    def no_of_solutions_visited(self, max_evals):
+    # def no_of_solutions_visited(self, max_evals):
 
-        """The method for calculating the maximum solutions that can be visited from the imput budget
-        Args:
-            max_evals (int): the budget in terms of simulations
+    #     """The method for calculating the maximum solutions that can be visited from the imput budget
+    #     Args:
+    #         max_evals (int): the budget in terms of simulations
 
-        Returns:
-            int: the maximum number of solutions that can be visited as a part of the algorithm
-        """
+    #     Returns:
+    #         int: the maximum number of solutions that can be visited as a part of the algorithm
+    #     """
 
-        sols = -1
-        budget_exhausted=0
-        while budget_exhausted <= max_evals:
-            budget_exhausted+=int(math.log(sols + 10, math.e) / math.log(5, math.e))
-            sols+=1
+    #     sols = -1
+    #     budget_exhausted=0
+    #     while budget_exhausted <= max_evals:
+    #         budget_exhausted+=int(math.log(sols + 10, math.e) / math.log(5, math.e))
+    #         sols+=1
 
-        return sols
+    #     return sols
 
 
     def det_a_b(self, domain, max_eval, X=None, y=None):
@@ -173,7 +173,7 @@ class stochastic_ruler:
             int: the maximum number for the number of iterations
         """
 
-        return int(math.log(k + 10, math.e) / math.log(5, math.e)) 
+        return int(3+math.log(k + 10, math.e) / math.log(5, math.e)) 
 
 
     
@@ -232,7 +232,7 @@ class stochastic_ruler:
             minh_of_z = b
             # step 0 ends here
             # print("total evals: ", self.no_of_solutions_visited(self.max_evals))
-            while k < self.no_of_solutions_visited(self.max_evals) + 1:
+            while k < self.max_evals:
                 
                 # step 1:  Given xk = x, choose a candidate zk from N(x)
                 if self.neigh_structure == 1:
@@ -248,11 +248,12 @@ class stochastic_ruler:
                 
                 for i in range(iter):
                     h_of_z = self.run(zk, zk, X, y)
+                    
                     # print("value at iter: ", h_of_z)
 
                     if self.print_solutions:
-                        print("k: " , k, "x_k: ", x_k, "f(x_k): ", h_of_z )   #the opt_x will be x_k or z_k??
-                    
+                        print("k: " , k, "x_k: ", x_k, "f(x_k): ", h_of_z )  
+                    k+=1 
 
                     if h_of_z <= self.target_value :
                         # print("h of z at stop: ", h_of_z)
@@ -265,13 +266,13 @@ class stochastic_ruler:
 
                     u = np.random.uniform(a, b)  # Then draw a sample u from U(a, b)
 
-                    if h_of_z > u:  # If h(z) > u, then let xk+1 = xk and go to step 3.
-                        # k += 1
-                        if h_of_z < minh_of_z:          # not a part of SR, comment for now. 
-                            minh_of_z = h_of_z
-                            opt_x = x_k
-                        k+=1 
-                        break
+                    # if h_of_z > u:  # If h(z) > u, then let xk+1 = xk and go to step 3.
+                    #     # k += 1
+                    #     if h_of_z < minh_of_z:          # not a part of SR, comment for now. 
+                    #         minh_of_z = h_of_z
+                    #         opt_x = x_k
+                    #     k+=1 
+                    #     break
                     # Otherwise draw another sample h(z) from H(z) and draw another sample u from U(a, b), part of the loop where iter = self.Mf(k) tells the maximum number of failures allowed
                     if h_of_z <= u:  # If all Mk tests have failed
                         x_k = zk
@@ -280,7 +281,6 @@ class stochastic_ruler:
                             minh_of_z = h_of_z
                             self.minh_of_z_tracker.append(h_of_z)
                             opt_x = zk
-                        k+=1 
                     
                 # step 2 ends here
                 # step 3: k = k+1
@@ -302,8 +302,7 @@ class stochastic_ruler:
 
             # printing initial value for checking
             init_value = self.func(initial_choice_HP)
-            # init_value = self.run(initial_choice_HP, initial_choice_HP, X, y)
-            # print("initial_value: ", init_value)
+
 
             # step 0: Select a starting point x0 in S and let k = 0
             k = 0
@@ -312,8 +311,11 @@ class stochastic_ruler:
             a, b = self.det_a_b(self.space, self.max_evals // 10, X, y)
 
             minh_of_z = b
+            index = 0
             # step 0 ends here
-            while k < self.no_of_solutions_visited(self.max_evals) + 1:
+            while k < self.max_evals:
+
+                f_avg = 0
 
                 # step 1:  Given xk = x, choose a candidate zk from N(x)
 
@@ -328,21 +330,16 @@ class stochastic_ruler:
                 iter = self.Mf(k)
                 for i in range(iter):
                     h_of_z = self.run(zk, zk, X, y)
+                    f_avg+=h_of_z
+                    
                     # print(h_of_z)
 
-                    if self.print_solutions:
-                        print("k: " , k, "x_k: ", x_k, "f(x_k): ", h_of_z )
+                    # if self.print_solutions:
+                    #     print("k: " , k, "x_k: ", x_k, "f(x_k): ", h_of_z )
                     
+                    k += 1
 
                     u = np.random.uniform(a, b)  # Then draw a sample u from U(a, b)
-
-                    if h_of_z > u:  # If h(z) > u, then let xk+1 = xk and go to step 3.
-                        if h_of_z < minh_of_z:
-                            minh_of_z = h_of_z
-                            opt_x = x_k
-                        k += 1
-                        break
-                    # Otherwise draw another sample h(z) from H(z) and draw another sample u from U(a, b), part of the loop where iter = self.Mf(k) tells the maximum number of failures allowed
 
                     if h_of_z < u:  # If all Mk tests have failed
                         x_k = zk
@@ -350,12 +347,14 @@ class stochastic_ruler:
                             minh_of_z = h_of_z
                             self.minh_of_z_tracker.append(minh_of_z)
                             opt_x = zk
-                        k += 1
+                    
+                index +=1
+                print("iters = ", iter, "sol no: ", index, "x_k = ", x_k, "z_k = ", zk, "avg value at zk = ", f_avg/iter)
+                       
                 # step 2 ends here
                 # step 3: k = k+1
 
 
-            # return minh_of_z, opt_x, a, b, minh_of_z_tracker
             return minh_of_z, opt_x, a, b
 
     def optsol(self):
@@ -390,3 +389,38 @@ class stochastic_ruler:
             funcval = self.func(opt_x)
             return funcval
         # print("acc" + str(acc))
+
+
+
+def func1(x0):
+    x1, x2 = x0["x1"], x0["x2"]
+
+    def multinodal(x):
+        return (np.sin(0.05 * np.pi * x) ** 6) / 2 ** (2 * ((x - 10) / 80) ** 2)
+
+    return -(multinodal(x1) + multinodal(x2)) + np.random.normal(0, 0.3)
+
+
+dom = {"x1": [i for i in range(101)], "x2": [i for i in range(101)]}
+
+sr_userDef = stochastic_ruler(space=dom, max_evals=200,prob_type="opt_sol", func=func1, neigh_structure=2, print_solutions=True)
+print(sr_userDef.optsol())
+
+
+# #sr_userDef.plot_minh_of_z()
+
+
+
+
+# def func2(x):
+#   x1,x2,x3,x4 = x['x1'],x['x2'], x['x3'],x['x4']
+#   return (x1+10*x2)**2 + 5* (x3-x4)**2 + (x2-2*x3)**4 + 10*(x1-x4)**4 + 1 +np.random.normal(0,30)
+
+# dom3 = {'x1':[i for i in range(20)],'x2':[i for i in range(20)],'x3':
+#        [i for i in range(20)],'x4':[i for i in range(20)]}
+# sr_userDef3 = stochastic_ruler(space = dom3, max_evals=15, prob_type = 'opt_sol', percent_improvement=80, 
+#                                func = func2, neigh_structure=2, print_solutions=True )
+# print(sr_userDef3.optsol())
+
+
+# for percent reduction, the average value breach is to be targeted. 
