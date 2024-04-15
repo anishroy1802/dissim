@@ -285,10 +285,10 @@ class SA():
             self.change = max(self.change, self.decrease)
 
         print("Budget exhausted. Stopping optimization.")
-        if self.flag == -1:
-            self.x_values.append(x_opt_next)
-            self.fx_values.append(fx_opt_next)
-            self.visits.append(self.V[x_opt_next])
+        # if self.flag == -1:
+        #     self.x_values.append(x_opt_next)
+        #     self.fx_values.append(fx_opt_next)
+        #     self.visits.append(self.V[x_opt_next])
         self.min_fx = min(self.fx_opt)
         min_index = self.fx_opt.index(self.min_fx)
         self.corresponding_x_value = self.X_opt[min_index]
@@ -332,11 +332,11 @@ k= 100
 
 
 
-# optimizer  = SA(domain = dom, step_size= step_size, T = 100, max_evals= 200,
-#                          func= objective_function, neigh_structure= 2, 
-#                          random_seed= 42, percent_improvement= 40, print_solutions= True)
-# optimizer.optimize()
-# optimizer.print_function_values()
+optimizer  = SA(domain = dom, step_size= step_size, T = 100, max_evals= 200,
+                         func= objective_function, neigh_structure= 2, 
+                         random_seed= 42, percent_improvement= 40, print_solutions= True)
+optimizer.optimize()
+optimizer.print_function_values()
 # print(optimizer.V)
 
 # optimizer  = SA(domain = dom, step_size= step_size, T = 100, max_evals= 275,
