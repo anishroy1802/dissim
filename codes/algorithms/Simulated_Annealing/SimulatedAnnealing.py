@@ -136,8 +136,8 @@ class SA():
         self.df = pd.DataFrame()
         self.x_values = []
         self.fx_values = []
-        self.z_values = []
-        self.fz_values = []
+        # self.z_values = []
+        # self.fz_values = []
         self.flag = -1
         if self.max_evals < 200:
             print("Error: Too less number of replications")
@@ -194,12 +194,14 @@ class SA():
         self.decrease = -math.inf
         self.change = -math.inf
         starting_value = 0
+        #Compute initial estimate of objective function
         for i in range(0, rep_value):
             starting_value+= self.func(X0)
         starting_value = starting_value/rep_value
+
         self.min_fx = starting_value
         x_next = X0
-
+        #print(X0, starting_value, self.V[X0])
         self.x_values.append(X0)
         self.fx_values.append(starting_value)
         self.visits.append(self.V[X0])
@@ -222,8 +224,8 @@ class SA():
 
             fx = 0
             fz = 0
-            self.x_values.append(x_j)
-            self.z_values.append(z_j)
+            # self.x_values.append(x_j)
+            # self.z_values.append(z_j)
             simreps = min(rep_value, self.max_evals)
             for sim_iter in range(simreps):
                 fx += self.func(list(x_j))
@@ -232,13 +234,14 @@ class SA():
             fx = fx / simreps
             fz = fz / simreps
 
-            self.fx_values.append(fx)
-            self.fz_values.append(fz)
+            # self.fx_values.append(fx)
+            # self.fz_values.append(fz)
             # if j == 0:
             #     self.history.append(x_j)
             #     self.fx_opt.append(fx)
             #     #self.function_values.append(fx)
             G_xz = np.exp(-(fz - fx) / self.T)
+            #print(x_j, z_j)
             if np.random.rand() <= G_xz:
                 x_next = z_j 
                 fx_next = fz
@@ -246,11 +249,18 @@ class SA():
                 x_next = x_j
                 fx_next = fx
 
+            #print(x_next)
             if x_next not in self.V:
+                #print("NEW SOL:", x_next)
                 self.V[x_next] = 1
             else:
+                #print("ALREADY EXISTS:", x_next)
                 self.V[x_next] = self.V[x_next] + 1
 
+            #print(self.V)
+            #print(x_next, fx_next, self.V[x_next])
+            self.fx_values.append(fx_next)
+            self.x_values.append(x_next)
             self.visits.append(self.V[x_next])
 
             x_opt_next = x_next if self.V[x_next] / self.D[x_next] > self.V[x_next] / self.D[x_j] else x_j
@@ -262,6 +272,7 @@ class SA():
 
             self.X_opt.append(x_opt_next)
             self.fx_opt.append(fx_opt_next)
+            self.visits_opt.append(self.V[x_opt_next])
             self.decrease = ((starting_value - self.fx_opt[-1])/ abs(starting_value))*100
             if self.percent_improvement is not None:
                 if self.decrease >= self.percent_improvement:
@@ -288,7 +299,7 @@ class SA():
             print("No target value")
 
         self.visited_df = pd.DataFrame({'x': self.x_values, 'f(x)': self.fx_values, 'visits made': self.visits})
-        self.df = pd.DataFrame({'x*': self.X_opt, 'f(x*)': self.fx_opt, 'reps used': reps})
+        self.df = pd.DataFrame({'x*': self.X_opt, 'f(x*)': self.fx_opt, 'reps used': reps, 'visits made': self.visits_opt})
         
     def print_function_values(self):
         if self.print_solutions:
@@ -315,7 +326,7 @@ def objective_function(x):
 
 #main()
 dom = [[0,2], [0,2]]
-step_size = [0.1, 0.2]
+step_size = [0.2, 0.2]
 T= 100
 k= 100
 
@@ -326,7 +337,7 @@ k= 100
 #                          random_seed= 42, percent_improvement= 40, print_solutions= True)
 # optimizer.optimize()
 # optimizer.print_function_values()
-#print(optimizer.V)
+# print(optimizer.V)
 
 # optimizer  = SA(domain = dom, step_size= step_size, T = 100, max_evals= 275,
 #                          func= objective_function, neigh_structure= 2, 
