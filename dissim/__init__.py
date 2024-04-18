@@ -850,6 +850,18 @@ class AHA():
   Stochastic Ruler Method
   """
 
+import numpy as np
+import math
+from typing import Union
+import pandas as pd
+import time
+import random
+import matplotlib.pyplot as plt
+from itertools import product
+from scipy.spatial.distance import euclidean
+from typing import Union, List
+
+
 class stochastic_ruler:
     """
     The class definition for the implementation of the Stochastic Ruler Random Search Method;
@@ -942,23 +954,33 @@ class stochastic_ruler:
         return dict(zip(initial_solution.keys(), chosen_combination))
 
 
-    # def no_of_solutions_visited(self, max_evals):
-
-    #     """The method for calculating the maximum solutions that can be visited from the imput budget
-    #     Args:
-    #         max_evals (int): the budget in terms of simulations
-
-    #     Returns:
-    #         int: the maximum number of solutions that can be visited as a part of the algorithm
-    #     """
-
-    #     sols = -1
-    #     budget_exhausted=0
-    #     while budget_exhausted <= max_evals:
-    #         budget_exhausted+=int(math.log(sols + 10, math.e) / math.log(5, math.e))
-    #         sols+=1
-
-    #     return sols
+    def min_list(self, lst):
+        if not lst:
+            return None  # Return None if the list is empty
+        min_val = lst[0]  # Initialize min_val with the first element of the list
+        for num in lst[1:]:  # Iterate through the list starting from the second element
+            if num < min_val:  # If the current number is smaller than min_val
+                min_val = num  # Update min_val with the current number
+        return min_val  # Return the minimum value
+    
+    
+    def update_dictionary(self, dict1, dict2, avg_value):
+        # Convert values of the first dictionary into a tuple
+        key_tuple = tuple(dict1.values())
+        
+        # Check if the key tuple already exists in the second dictionary
+        if key_tuple in dict2:
+            # If it exists, update the value with the mean of avg_value and existing value
+            dict2[key_tuple] = (dict2[key_tuple] + avg_value) / 2
+        else:
+            # If it doesn't exist, add the key tuple to the second dictionary with avg_value as the value
+            dict2[key_tuple] = avg_value
+    
+    def find_key_by_value(self, number, dictionary):
+        for key, value in dictionary.items():
+            if value == number:
+                return key
+        return None  # Return None if the number is not found in the dictionary
 
 
     def det_a_b(self, domain, max_eval, X=None, y=None):
@@ -1040,6 +1062,8 @@ class stochastic_ruler:
         # X_train,X_test,y_train,y_test = self.data_preprocessing(X,y)
 
         self.minh_of_z_tracker = []
+        self.avg_value_tracker = []
+        solutions_visited = {}
 
         if self.percent_improvement is not None:
 
@@ -1067,11 +1091,8 @@ class stochastic_ruler:
             x_k = initial_choice_HP
             opt_x = x_k
             a, b = self.det_a_b(self.space, self.max_evals // 10, X, y)
-            # print("a,b:")
-            # print(a,b)
             minh_of_z = b
             # step 0 ends here
-            # print("total evals: ", self.no_of_solutions_visited(self.max_evals))
             while k < self.max_evals:
                 
                 # step 1:  Given xk = x, choose a candidate zk from N(x)
@@ -1085,48 +1106,62 @@ class stochastic_ruler:
                 # step 1 ends here
                 # step 2: Given zk = z, draw a sample h(z) from H(z)
                 iter = self.Mf(k)
-                
-                for i in range(iter):
-                    h_of_z = self.run(zk, zk, X, y)
+                index = 0
+                # step 0 ends here
+                while k < self.max_evals:
+
+                    f_avg = 0
+                    i=0
+
+                    # step 1:  Given xk = x, choose a candidate zk from N(x)
+
+                    if self.neigh_structure == 1:
+                        zk = self.next_solution_based_on_distance(x_k)                  #N1
                     
-                    # print("value at iter: ", h_of_z)
+                    elif self.neigh_structure == 2:
+                        zk = self.random_pick_from_neighbourhood_structure(x_k)         #N2
+                    # step 1 ends here
+                        
+                    # step 2: Given zk = z, draw a sample h(z) from H(z)
+                    iter = self.Mf(k)
+                    for i in range(iter):
+                        h_of_z = self.run(zk, zk, X, y)
+                        f_avg+=h_of_z
+                        k += 1
 
-                    if self.print_solutions:
-                        print("k: " , k, "x_k: ", x_k, "f(x_k): ", h_of_z )  
-                    k+=1 
+                        if f_avg/(i+1) <= self.target_value :
+                            # print("h of z at stop: ", h_of_z)
 
-                    if h_of_z <= self.target_value :
-                        # print("h of z at stop: ", h_of_z)
-
-                        print("Stopping criterion of ", self.percent_improvement,"% reduction in function value. Stopping optimization.")
-                        # return h_of_z, opt_x, a, b, minh_of_z_tracker
-                        self.minh_of_z_tracker.append(h_of_z)
-                        # print(self.minh_of_z_tracker)
-                        return h_of_z, opt_x, a, b
-
-                    u = np.random.uniform(a, b)  # Then draw a sample u from U(a, b)
-
-                    # if h_of_z > u:  # If h(z) > u, then let xk+1 = xk and go to step 3.
-                    #     # k += 1
-                    #     if h_of_z < minh_of_z:          # not a part of SR, comment for now. 
-                    #         minh_of_z = h_of_z
-                    #         opt_x = x_k
-                    #     k+=1 
-                    #     break
-                    # Otherwise draw another sample h(z) from H(z) and draw another sample u from U(a, b), part of the loop where iter = self.Mf(k) tells the maximum number of failures allowed
-                    if h_of_z <= u:  # If all Mk tests have failed
-                        x_k = zk
-                        # k += 1
-                        if h_of_z < minh_of_z:
-                            minh_of_z = h_of_z
+                            print("Stopping criterion of ", self.percent_improvement,"% reduction in function value. Stopping optimization.")
                             self.minh_of_z_tracker.append(h_of_z)
-                            opt_x = zk
-                    
-                # step 2 ends here
-                # step 3: k = k+1
+                            self.avg_value_tracker.append(f_avg/(i+1))
+                            minima = self.min_list(self.avg_value_tracker)
+                            return minima, opt_x, a, b
 
-            # return minh_of_z, opt_x, a, b, minh_of_z_tracker
-            return minh_of_z, opt_x, a, b 
+                        u = np.random.uniform(a, b)  # Then draw a sample u from U(a, b)
+
+                        if h_of_z > u:
+                            # print("iters", iter, "sol no: ", index, "z_k = ", zk,  "Not optimal, SR algo reject")
+                            break
+
+                        if h_of_z < u:  # If all Mk tests have failed
+                            x_k = zk
+                            # f_avg+=h_of_z
+                            if h_of_z < minh_of_z:
+                                # f_avg+=h_of_z
+                                opt_x = zk
+                                minh_of_z = h_of_z
+                                self.minh_of_z_tracker.append(minh_of_z)
+                                
+                        #updating f_of_z outside seems more accurate. THINK. 
+                    # minima = self.min_list(self.avg_value_tracker)
+                    index +=1
+                    if (f_avg != 0):
+                        self.avg_value_tracker.append(f_avg/iter)
+                    if self.print_solutions:
+                        print("iters = ", iter, "sol no: ", index, "z_k = ", zk, "avg value at zk = ", f_avg/iter)                    
+
+
 
         else:
             print("No percent Reduction criteria set:")
@@ -1172,30 +1207,47 @@ class stochastic_ruler:
                     h_of_z = self.run(zk, zk, X, y)
                     f_avg+=h_of_z
                     
-                    # print(h_of_z)
-
-                    # if self.print_solutions:
-                    #     print("k: " , k, "x_k: ", x_k, "f(x_k): ", h_of_z )
-                    
                     k += 1
 
                     u = np.random.uniform(a, b)  # Then draw a sample u from U(a, b)
 
+                    if h_of_z > u:
+                        # print("iters", iter, "sol no: ", index, "z_k = ", zk,  "Not optimal, SR algo reject")
+                        break
+
                     if h_of_z < u:  # If all Mk tests have failed
                         x_k = zk
+                        # f_avg+=h_of_z
                         if h_of_z < minh_of_z:
+                            # f_avg+=h_of_z
+                            opt_x = zk
                             minh_of_z = h_of_z
                             self.minh_of_z_tracker.append(minh_of_z)
-                            opt_x = zk
-                    
+                            
+                #updating f_of_z outside seems more accurate. THINK. 
                 index +=1
-                print("iters = ", iter, "sol no: ", index, "x_k = ", x_k, "z_k = ", zk, "avg value at zk = ", f_avg/iter)
+                if (f_avg != 0):
+                    self.avg_value_tracker.append(f_avg/iter)
+                    if self.print_solutions:
+                        # print('k = ', k, "iters = ", iter, "sol no: ", index, "z_k = ", zk, "avg value at zk = ", f_avg/iter) # k gives an idea of the number of replications before rejection
+                        print( "iters = ", iter, "sol no: ", index, "z_k = ", zk, "avg value at zk = ", f_avg/iter)
+                        if k >= self.max_evals:
+                            print("Solutions visited and overall average value = ", solutions_visited)
+
+                self.update_dictionary (zk, solutions_visited, f_avg/iter )
+                somelist = list(solutions_visited.values())
+                minima = self.min_list(somelist)
+                opt_x = self.find_key_by_value(minima, solutions_visited)
                        
-                # step 2 ends here
-                # step 3: k = k+1
 
+            # print("single rep minimum tracker: ", self.minh_of_z_tracker)
+            # print("average value tracker: ", self.avg_value_tracker)
+            # print("minimum average value:", minima)
+            # print ("dictionary of values = ", solutions_visited)
+            # print("length of dictionary = ", len(solutions_visited))
+            # print("length of avg = " , len(self.avg_value_tracker))
 
-            return minh_of_z, opt_x, a, b
+            return minima, opt_x, a, b
 
     def optsol(self):
         """this gives the optimal solution for the problem using SR_Algo() method
@@ -1229,3 +1281,6 @@ class stochastic_ruler:
             funcval = self.func(opt_x)
             return funcval
         # print("acc" + str(acc))
+
+
+
