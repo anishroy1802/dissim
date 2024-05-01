@@ -333,7 +333,7 @@ k= 100
 
 
 optimizer  = SA(domain = dom, step_size= step_size, T = 100, max_evals= 200,
-                         func= objective_function, neigh_structure= 2, 
+                         func= objective_function, neigh_structure= 1, 
                          random_seed= 42, percent_improvement= 40, print_solutions= True)
 optimizer.optimize()
 optimizer.print_function_values()

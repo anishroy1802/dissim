@@ -400,10 +400,10 @@ def facility_loc(x):
   return sum(avg_dist_daywise)/T0
 
 
-init = [2,2,2,2]
-dom = [[1,7]]*4
-step_size = [0.1,0.25,0.5,0.5]
-func1AHA = AHA(func2,dom, step_size= step_size,max_evals= 500, percent_improvement=60, init_solution=init,m = 40)
+init = [2,2]
+dom = [[1,7]]*2
+step_size = [0.25,0.5]
+func1AHA = AHA(objective_function,dom, step_size= step_size,max_evals= 500, percent_improvement=60, init_solution=init,m = 40)
 a = func1AHA.optimize()
 
 func1AHA.print_function_values()
