@@ -284,8 +284,9 @@ class SA():
                     break
             self.change = max(self.change, self.decrease)
 
-        print("Budget exhausted. Stopping optimization.")
-        # if self.flag == -1:
+        #print("Budget exhausted. Stopping optimization.")
+        if self.flag == -1:
+            print("Budget exhausted. Stopping optimization.")
         #     self.x_values.append(x_opt_next)
         #     self.fx_values.append(fx_opt_next)
         #     self.visits.append(self.V[x_opt_next])

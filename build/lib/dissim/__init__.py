@@ -219,6 +219,14 @@ class KN():
 """
 Simulated Anealing Algorithm
 """
+def tracing_start():
+    tracemalloc.stop()
+    print("Tracing Status: ", tracemalloc.is_tracing())
+    tracemalloc.start()
+    print("Tracing Status: ", tracemalloc.is_tracing())
+
+# Implement soln with max_evals as overall simulation budget with a default 5 reps per solution
+#k = simulation budget
 class SA():
 
     def __init__(self, domain, step_size, T, func, neigh_structure = 1, max_evals= 300,  print_solutions = True, init_solution=None, random_seed=None, percent_improvement=None):
@@ -478,8 +486,9 @@ class SA():
                     break
             self.change = max(self.change, self.decrease)
 
-        print("Budget exhausted. Stopping optimization.")
-        # if self.flag == -1:
+        #print("Budget exhausted. Stopping optimization.")
+        if self.flag == -1:
+            print("Budget exhausted. Stopping optimization.")
         #     self.x_values.append(x_opt_next)
         #     self.fx_values.append(fx_opt_next)
         #     self.visits.append(self.V[x_opt_next])

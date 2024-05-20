@@ -6,7 +6,7 @@ def multinodal(x):
 
 def func1(x0):
   x1,x2 = x0[0],x0[1]
-  return -(multinodal(x1)+multinodal(x2))+np.random.normal(0,0.3)
+  return -(multinodal(x1)+multinodal(x2))+np.random.normal(0,30)
 
 init = [2,2]
 dom = [[1,7]]*2
